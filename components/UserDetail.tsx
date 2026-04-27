@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { RecommendationResult, TariffPlan } from '../types';
+import type { RecommendationResult, ReviewStatus, TariffPlan } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { buildRecommendationResultForPlan } from '../services/engine';
 
@@ -7,20 +7,72 @@ interface UserDetailProps {
     result: RecommendationResult;
     plans: TariffPlan[];
     onBack: () => void;
+    onSaveResult: (result: RecommendationResult) => void;
 }
 
-const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack }) => {
+const REVIEW_STATUS_META: Record<ReviewStatus, { label: string; className: string }> = {
+    pending: { label: '待确认', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+    accepted: { label: '已接受', className: 'bg-green-50 text-green-700 border-green-200' },
+    rejected: { label: '已驳回', className: 'bg-red-50 text-red-700 border-red-200' },
+};
+
+const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack, onSaveResult }) => {
     const [activeResult, setActiveResult] = useState(result);
+    const [saveMessage, setSaveMessage] = useState('');
 
     useEffect(() => {
         setActiveResult(result);
+        setSaveMessage('');
     }, [result]);
 
-    const { user, recommendedPlan, reason, script } = activeResult;
+    const { user, recommendedPlan, reason, script, originalRecommendedPlan } = activeResult;
+    const availablePlans = [...plans]
+        .filter(plan => plan.isActive)
+        .sort((a, b) => a.price - b.price);
+
+    const mergeWithReviewState = (nextResult: RecommendationResult): RecommendationResult => {
+        const baseOriginalPlan = activeResult.originalRecommendedPlan ?? result.originalRecommendedPlan ?? result.recommendedPlan;
+
+        return {
+            ...nextResult,
+            id: activeResult.id ?? result.id,
+            originalRecommendedPlan: baseOriginalPlan,
+            reviewStatus: activeResult.reviewStatus,
+            reviewNote: activeResult.reviewNote,
+            selectionMode: nextResult.recommendedPlan.id === baseOriginalPlan.id ? 'auto' : 'manual',
+        };
+    };
 
     const handleSelectAlternative = (planId: string) => {
-        setActiveResult(buildRecommendationResultForPlan(activeResult.user, planId, plans));
+        setActiveResult(mergeWithReviewState(buildRecommendationResultForPlan(activeResult.user, planId, plans)));
+        setSaveMessage('');
     };
+
+    const handleReviewStatusChange = (status: ReviewStatus) => {
+        setActiveResult(prev => ({ ...prev, reviewStatus: status }));
+        setSaveMessage('');
+    };
+
+    const handleReviewNoteChange = (value: string) => {
+        setActiveResult(prev => ({ ...prev, reviewNote: value }));
+        setSaveMessage('');
+    };
+
+    const handleRestoreSystemRecommendation = () => {
+        setActiveResult(mergeWithReviewState(buildRecommendationResultForPlan(activeResult.user, originalRecommendedPlan.id, plans)));
+        setSaveMessage('');
+    };
+
+    const handleSave = () => {
+        onSaveResult(activeResult);
+        setSaveMessage('当前结论已保存');
+    };
+
+    const isDirty = (
+        activeResult.recommendedPlan.id !== result.recommendedPlan.id ||
+        activeResult.reviewStatus !== result.reviewStatus ||
+        activeResult.reviewNote !== result.reviewNote
+    );
 
     const ComparisonRow = ({ label, current, recommended, unit = '' }: { label: string, current: string|number, recommended: string|number, unit?: string }) => (
         <div className="grid grid-cols-3 gap-4 py-3 border-b border-slate-100 last:border-0">
@@ -60,6 +112,14 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack }) => {
                                 <p className="text-sm text-slate-500">用户: {user.phone} ({user.province})</p>
                             </div>
                             <div className="text-right">
+                                <div className="flex justify-end gap-2 mb-2">
+                                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${REVIEW_STATUS_META[activeResult.reviewStatus].className}`}>
+                                        {REVIEW_STATUS_META[activeResult.reviewStatus].label}
+                                    </span>
+                                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${activeResult.selectionMode === 'manual' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                        {activeResult.selectionMode === 'manual' ? '人工校正' : '系统推荐'}
+                                    </span>
+                                </div>
                                 <div className="text-sm text-slate-500">适配理由</div>
                                 <div className="font-medium text-brand-600">{reason}</div>
                             </div>
@@ -118,6 +178,100 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack }) => {
 
                 {/* Right: AI Script & Action */}
                 <div className="space-y-6">
+                    <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 space-y-4">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-800">人工校正</h3>
+                                <p className="text-xs text-slate-500 mt-1">确认最终方案、状态和备注后可直接导出结果。</p>
+                            </div>
+                            {saveMessage && (
+                                <span className="text-xs text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-1">
+                                    {saveMessage}
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                            <div className="flex justify-between gap-4">
+                                <span className="text-slate-500">系统初始推荐</span>
+                                <span className="font-medium text-slate-800">{originalRecommendedPlan.name}</span>
+                            </div>
+                            <div className="mt-2 flex justify-between gap-4">
+                                <span className="text-slate-500">当前最终方案</span>
+                                <span className="font-semibold text-brand-600">{recommendedPlan.name}</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">最终套餐选择</label>
+                            <select
+                                value={recommendedPlan.id}
+                                onChange={(e) => handleSelectAlternative(e.target.value)}
+                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+                            >
+                                {availablePlans.map(plan => (
+                                    <option key={plan.id} value={plan.id}>
+                                        {plan.name} | {plan.price}元 | {plan.data}G | {plan.voice}分
+                                        {plan.hasBroadband ? ` | ${plan.broadbandSpeed}M宽带` : ''}
+                                        {plan.isFTTR ? ' | FTTR' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <div className="text-sm font-medium text-slate-700 mb-2">审核状态</div>
+                            <div className="grid grid-cols-3 gap-2">
+                                {(Object.keys(REVIEW_STATUS_META) as ReviewStatus[]).map(status => (
+                                    <button
+                                        key={status}
+                                        type="button"
+                                        onClick={() => handleReviewStatusChange(status)}
+                                        className={`rounded-md border px-3 py-2 text-sm font-medium transition ${
+                                            activeResult.reviewStatus === status
+                                                ? REVIEW_STATUS_META[status].className
+                                                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        {REVIEW_STATUS_META[status].label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">备注 / 调整原因</label>
+                            <textarea
+                                rows={4}
+                                value={activeResult.reviewNote}
+                                onChange={(e) => handleReviewNoteChange(e.target.value)}
+                                placeholder="例如：客户明确接受 79 元档；因宽带保有，保留融合套餐；暂不推荐 FTTR。"
+                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+                            />
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                            <button
+                                type="button"
+                                onClick={handleSave}
+                                className="px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 text-sm font-medium"
+                            >
+                                保存当前结论
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleRestoreSystemRecommendation}
+                                disabled={activeResult.selectionMode !== 'manual'}
+                                className="px-4 py-2 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                恢复系统推荐
+                            </button>
+                            {isDirty && (
+                                <span className="text-xs text-amber-600 self-center">当前有未保存修改</span>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="bg-gradient-to-b from-brand-50 to-white rounded-lg shadow-sm border border-brand-100 p-6">
                         <div className="flex items-center gap-2 mb-4">
                             <div className="bg-brand-500 text-white p-1.5 rounded-md">
@@ -144,7 +298,11 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack }) => {
                                     key={plan.id}
                                     type="button"
                                     onClick={() => handleSelectAlternative(plan.id)}
-                                    className="w-full p-3 border border-slate-100 rounded hover:bg-slate-50 hover:border-brand-200 transition cursor-pointer text-left"
+                                    className={`w-full p-3 border rounded transition cursor-pointer text-left ${
+                                        recommendedPlan.id === plan.id
+                                            ? 'border-brand-300 bg-brand-50'
+                                            : 'border-slate-100 hover:bg-slate-50 hover:border-brand-200'
+                                    }`}
                                 >
                                     <div className="flex justify-between items-center">
                                         <div className="font-medium text-sm text-slate-800">{plan.name}</div>
@@ -157,6 +315,11 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack }) => {
                                     </div>
                                 </button>
                             ))}
+                            {activeResult.selectionMode === 'manual' && (
+                                <div className="text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-md px-3 py-2">
+                                    当前最终方案已从系统初始推荐调整为人工校正结果。
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

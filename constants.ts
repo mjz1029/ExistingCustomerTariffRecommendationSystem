@@ -58,6 +58,19 @@ export const CSV_HEADER_MAP: Record<string, string> = {
   '是否FTTR': 'isFTTR'
 };
 
+export const PLAN_HEADER_MAP: Record<string, string> = {
+  '套餐编码': 'id',
+  '套餐名称': 'name',
+  '资费': 'price',
+  '流量': 'data',
+  '语音': 'voice',
+  '是否含宽带': 'hasBroadband',
+  '宽带速率': 'broadbandSpeed',
+  '是否FTTR': 'isFTTR',
+  '其他权益': 'extras',
+  '是否上架': 'isActive',
+};
+
 export const REQUIRED_HEADERS = [
   { name: '联系电话', required: true, desc: '用户唯一标识' },
   { name: '归属地', required: false, desc: '省/市' },
@@ -74,4 +87,17 @@ export const REQUIRED_HEADERS = [
   { name: '宽带速率', required: false, desc: 'Mbps (数值)' },
   { name: '是否FTTR', required: false, desc: '是/否' },
   { name: '备注', required: false, desc: '其他信息' },
+];
+
+export const PLAN_REQUIRED_HEADERS = [
+  { name: '套餐编码', required: true, desc: '套餐唯一标识，建议使用资费系统编码' },
+  { name: '套餐名称', required: true, desc: '用于推荐和展示的套餐名称' },
+  { name: '资费', required: true, desc: '月费，数值类型' },
+  { name: '流量', required: true, desc: '套餐流量，单位 GB' },
+  { name: '语音', required: true, desc: '套餐语音分钟数' },
+  { name: '是否含宽带', required: true, desc: '是/否' },
+  { name: '宽带速率', required: false, desc: '宽带速率 Mbps，无宽带填 0' },
+  { name: '是否FTTR', required: false, desc: '是/否' },
+  { name: '其他权益', required: false, desc: '会员、云存、安防等' },
+  { name: '是否上架', required: false, desc: '是/否，默认是' },
 ];

@@ -211,12 +211,16 @@ const buildRecommendationResultFromCandidate = (
   return {
     user: normalizedUser,
     recommendedPlan: bestMatch,
+    originalRecommendedPlan: bestMatch,
     alternatives,
     reason: reasons.join('，'),
     script,
     predictedBill: Math.max(bestMatch.price, normalizedUser.arpu3Month * 0.9),
     riskLevel,
-    saveAmount
+    saveAmount,
+    reviewStatus: 'pending',
+    reviewNote: '',
+    selectionMode: 'auto',
   };
 };
 

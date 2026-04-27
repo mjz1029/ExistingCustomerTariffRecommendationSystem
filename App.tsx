@@ -8,6 +8,19 @@ import Home from './components/Home';
 import { generateTemplate, parseExcelFile } from './utils/excel';
 import { runRecommendationEngine } from './services/engine';
 
+const enrichRecommendationResults = (items: RecommendationResult[]): RecommendationResult[] => {
+  const batchId = Date.now().toString();
+
+  return items.map((item, index) => ({
+    ...item,
+    id: item.id ?? `${batchId}-${index}-${item.user.phone || 'user'}`,
+    originalRecommendedPlan: item.originalRecommendedPlan ?? item.recommendedPlan,
+    reviewStatus: item.reviewStatus ?? 'pending',
+    reviewNote: item.reviewNote ?? '',
+    selectionMode: item.selectionMode ?? 'auto',
+  }));
+};
+
 const App: React.FC = () => {
   // --- Global State ---
   const [activePage, setActivePage] = useState<PageView>('home');
@@ -44,6 +57,14 @@ const App: React.FC = () => {
     setPlans(plans.map(p => p.id === id ? { ...p, isActive: !p.isActive } : p));
   };
 
+  const handleImportPlans = (importedPlans: TariffPlan[]) => {
+    setPlans(importedPlans);
+    setRawData([]);
+    setResults([]);
+    setSelectedResult(null);
+    setActivePage('plans');
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setIsProcessing(true);
@@ -51,7 +72,7 @@ const App: React.FC = () => {
         const data = await parseExcelFile(e.target.files[0]);
         setRawData(data);
         // Auto run engine
-        const recs = runRecommendationEngine(data, plans);
+        const recs = enrichRecommendationResults(runRecommendationEngine(data, plans));
         setResults(recs);
         setActivePage('dashboard');
       } catch (err) {
@@ -71,6 +92,13 @@ const App: React.FC = () => {
   const handleBackToDashboard = () => {
       setSelectedResult(null);
       setActivePage('dashboard');
+  };
+
+  const handleSaveResult = (updatedResult: RecommendationResult) => {
+    setResults(prevResults =>
+      prevResults.map(result => result.id === updatedResult.id ? updatedResult : result)
+    );
+    setSelectedResult(updatedResult);
   };
 
   // --- Navigation & Layout ---
@@ -127,7 +155,12 @@ const App: React.FC = () => {
 
         {/* User Detail View */}
         {activePage === 'user-detail' && selectedResult && (
-            <UserDetail result={selectedResult} plans={plans} onBack={handleBackToDashboard} />
+            <UserDetail
+              result={selectedResult}
+              plans={plans}
+              onBack={handleBackToDashboard}
+              onSaveResult={handleSaveResult}
+            />
         )}
 
         {/* Plans View */}
@@ -138,6 +171,7 @@ const App: React.FC = () => {
             onEdit={handleEditPlan}
             onDelete={handleDeletePlan} 
             onToggle={handleTogglePlan}
+            onImport={handleImportPlans}
           />
         )}
 

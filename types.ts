@@ -32,15 +32,23 @@ export interface UserRecord {
   remark?: string;
 }
 
+export type ReviewStatus = 'pending' | 'accepted' | 'rejected';
+export type SelectionMode = 'auto' | 'manual';
+
 export interface RecommendationResult {
+  id?: string;
   user: UserRecord;
   recommendedPlan: TariffPlan;
+  originalRecommendedPlan: TariffPlan;
   alternatives: TariffPlan[];
   reason: string;
   script: string; // AI话术
   predictedBill: number; // 预测账单
   riskLevel: 'low' | 'medium' | 'high'; // 适配风险
   saveAmount: number; // 预计节省
+  reviewStatus: ReviewStatus; // 人工审核状态
+  reviewNote: string; // 人工备注/调整原因
+  selectionMode: SelectionMode; // 当前结论是系统推荐还是人工改选
 }
 
 export type PageView = 'home' | 'dashboard' | 'plans' | 'import' | 'user-detail';

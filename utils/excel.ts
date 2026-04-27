@@ -1,5 +1,5 @@
-import type { UserRecord } from '../types';
-import { CSV_HEADER_MAP } from '../constants';
+import type { RecommendationResult, TariffPlan, UserRecord } from '../types';
+import { CSV_HEADER_MAP, PLAN_HEADER_MAP, PLAN_REQUIRED_HEADERS } from '../constants';
 
 declare global {
   interface Window {
@@ -7,11 +7,25 @@ declare global {
   }
 }
 
+const REVIEW_STATUS_LABELS = {
+  pending: '待确认',
+  accepted: '已接受',
+  rejected: '已驳回',
+} as const;
+
 const normalizeRatio = (value: number): number => {
   if (!Number.isFinite(value) || value <= 0) return 0;
   if (value > 1 && Number.isInteger(value) && value <= 100) return value / 100;
   if (value > 1) return 1;
   return value;
+};
+
+const parseBooleanValue = (value: unknown, defaultValue = false): boolean => {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  const strVal = String(value).trim().toLowerCase();
+  if (['是', 'yes', 'true', '1', 'y'].includes(strVal)) return true;
+  if (['否', 'no', 'false', '0', 'n'].includes(strVal)) return false;
+  return defaultValue;
 };
 
 export const parseExcelFile = (file: File): Promise<UserRecord[]> => {
@@ -40,9 +54,7 @@ export const parseExcelFile = (file: File): Promise<UserRecord[]> => {
                 value = normalizeRatio(value);
             }
             if (['hasBroadband', 'isFTTR'].includes(enKey)) {
-                // Convert "是"/"Yes"/"TRUE" to boolean
-                const strVal = String(value).trim().toLowerCase();
-                value = ['是', 'yes', 'true', '1'].includes(strVal);
+                value = parseBooleanValue(value);
             }
             if (enKey === 'phone') {
                 value = String(value);
@@ -59,6 +71,130 @@ export const parseExcelFile = (file: File): Promise<UserRecord[]> => {
         });
 
         resolve(parsedData);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = (error) => reject(error);
+    reader.readAsBinaryString(file);
+  });
+};
+
+export const generatePlanTemplate = () => {
+  const headers = PLAN_REQUIRED_HEADERS.map(item => item.name);
+  const data = [
+    {
+      '套餐编码': '20252063',
+      '套餐名称': '5G畅享套餐49元',
+      '资费': 49,
+      '流量': 60,
+      '语音': 700,
+      '是否含宽带': '否',
+      '宽带速率': 0,
+      '是否FTTR': '否',
+      '其他权益': '视频彩铃, 任我选黄金会员',
+      '是否上架': '是',
+    },
+    {
+      '套餐编码': '20253101',
+      '套餐名称': '5GA全家享(全光版)99元',
+      '资费': 99,
+      '流量': 120,
+      '语音': 1300,
+      '是否含宽带': '是',
+      '宽带速率': 1000,
+      '是否FTTR': '是',
+      '其他权益': 'FTTR1+1, 语音遥控器',
+      '是否上架': '是',
+    },
+  ];
+
+  const ws = window.XLSX.utils.json_to_sheet(data, { header: headers });
+  const wb = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb, ws, '套餐导入模板');
+  window.XLSX.writeFile(wb, '套餐导入模板.xlsx');
+};
+
+export const parsePlanExcelFile = (file: File): Promise<TariffPlan[]> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = window.XLSX.read(data, { type: 'binary' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rows = window.XLSX.utils.sheet_to_json(worksheet, { defval: '' }) as Record<string, unknown>[];
+
+        const headerRow = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 0, blankrows: false })[0] as string[] | undefined;
+        const missingHeaders = PLAN_REQUIRED_HEADERS
+          .filter(header => header.required && !(headerRow || []).includes(header.name))
+          .map(header => header.name);
+
+        if (missingHeaders.length > 0) {
+          throw new Error(`缺少必要表头：${missingHeaders.join('、')}`);
+        }
+
+        if (rows.length === 0) {
+          throw new Error('套餐文件为空，请至少保留一条套餐记录。');
+        }
+
+        const importedPlans: TariffPlan[] = [];
+        const rowErrors: string[] = [];
+        const seenIds = new Set<string>();
+
+        rows.forEach((row, index) => {
+          const rowNo = index + 2;
+          const mapped: Record<string, unknown> = {};
+
+          Object.keys(PLAN_HEADER_MAP).forEach((cnKey) => {
+            const enKey = PLAN_HEADER_MAP[cnKey];
+            mapped[enKey] = row[cnKey];
+          });
+
+          const id = String(mapped.id || '').trim();
+          const name = String(mapped.name || '').trim();
+          const price = Number(mapped.price);
+          const dataValue = Number(mapped.data);
+          const voice = Number(mapped.voice);
+          const hasBroadband = parseBooleanValue(mapped.hasBroadband, false);
+          const broadbandSpeed = Number(mapped.broadbandSpeed || 0);
+          const isFTTR = parseBooleanValue(mapped.isFTTR, false);
+          const extras = String(mapped.extras || '').trim();
+          const isActive = parseBooleanValue(mapped.isActive, true);
+
+          if (!id) rowErrors.push(`第 ${rowNo} 行：套餐编码不能为空`);
+          if (!name) rowErrors.push(`第 ${rowNo} 行：套餐名称不能为空`);
+          if (!Number.isFinite(price) || price < 0) rowErrors.push(`第 ${rowNo} 行：资费必须是大于等于 0 的数字`);
+          if (!Number.isFinite(dataValue) || dataValue < 0) rowErrors.push(`第 ${rowNo} 行：流量必须是大于等于 0 的数字`);
+          if (!Number.isFinite(voice) || voice < 0) rowErrors.push(`第 ${rowNo} 行：语音必须是大于等于 0 的数字`);
+          if (!Number.isFinite(broadbandSpeed) || broadbandSpeed < 0) rowErrors.push(`第 ${rowNo} 行：宽带速率必须是大于等于 0 的数字`);
+          if (hasBroadband && broadbandSpeed <= 0) rowErrors.push(`第 ${rowNo} 行：含宽带套餐必须填写大于 0 的宽带速率`);
+          if (!hasBroadband && broadbandSpeed > 0) rowErrors.push(`第 ${rowNo} 行：无宽带套餐的宽带速率应为 0`);
+          if (isFTTR && !hasBroadband) rowErrors.push(`第 ${rowNo} 行：FTTR 套餐必须同时包含宽带`);
+          if (seenIds.has(id)) rowErrors.push(`第 ${rowNo} 行：套餐编码 ${id} 重复`);
+
+          seenIds.add(id);
+
+          importedPlans.push({
+            id,
+            name,
+            price,
+            data: dataValue,
+            voice,
+            hasBroadband,
+            broadbandSpeed: hasBroadband ? broadbandSpeed : 0,
+            isFTTR,
+            extras,
+            isActive,
+          });
+        });
+
+        if (rowErrors.length > 0) {
+          throw new Error(rowErrors.slice(0, 8).join('\n'));
+        }
+
+        resolve(importedPlans);
       } catch (error) {
         reject(error);
       }
@@ -122,17 +258,22 @@ export const generateTemplate = () => {
   window.XLSX.writeFile(wb, "用户导入模板.xlsx");
 };
 
-export const exportResults = (results: any[]) => {
+export const exportResults = (results: RecommendationResult[]) => {
     const exportData = results.map(r => ({
         '联系电话': r.user.phone,
         '归属地': r.user.province,
         '当前套餐': r.user.currentPlanName,
         '当前档位': r.user.currentPrice,
         '近三月ARPU': r.user.arpu3Month,
+        '系统初始推荐': r.originalRecommendedPlan.name,
+        '系统初始档位': r.originalRecommendedPlan.price,
         '当前宽带': r.user.hasBroadband ? `${r.user.broadbandSpeed}M` : '无',
-        '推荐套餐': r.recommendedPlan.name,
-        '推荐档位': r.recommendedPlan.price,
-        '推荐宽带': r.recommendedPlan.hasBroadband ? `${r.recommendedPlan.broadbandSpeed}M` : '无',
+        '最终推荐套餐': r.recommendedPlan.name,
+        '最终推荐档位': r.recommendedPlan.price,
+        '最终推荐宽带': r.recommendedPlan.hasBroadband ? `${r.recommendedPlan.broadbandSpeed}M` : '无',
+        '是否人工校正': r.selectionMode === 'manual' ? '是' : '否',
+        '审核状态': REVIEW_STATUS_LABELS[r.reviewStatus],
+        '审核备注': r.reviewNote,
         '推荐理由': r.reason,
         'AI话术': r.script,
         '预计账单': r.predictedBill.toFixed(2),
