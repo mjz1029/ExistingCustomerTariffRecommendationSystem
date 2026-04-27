@@ -1,14 +1,26 @@
-import React from 'react';
-import { RecommendationResult, UserRecord, TariffPlan } from '../types';
+import React, { useEffect, useState } from 'react';
+import type { RecommendationResult, TariffPlan } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { buildRecommendationResultForPlan } from '../services/engine';
 
 interface UserDetailProps {
     result: RecommendationResult;
+    plans: TariffPlan[];
     onBack: () => void;
 }
 
-const UserDetail: React.FC<UserDetailProps> = ({ result, onBack }) => {
-    const { user, recommendedPlan, reason, script, saveAmount } = result;
+const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack }) => {
+    const [activeResult, setActiveResult] = useState(result);
+
+    useEffect(() => {
+        setActiveResult(result);
+    }, [result]);
+
+    const { user, recommendedPlan, reason, script } = activeResult;
+
+    const handleSelectAlternative = (planId: string) => {
+        setActiveResult(buildRecommendationResultForPlan(activeResult.user, planId, plans));
+    };
 
     const ComparisonRow = ({ label, current, recommended, unit = '' }: { label: string, current: string|number, recommended: string|number, unit?: string }) => (
         <div className="grid grid-cols-3 gap-4 py-3 border-b border-slate-100 last:border-0">
@@ -60,7 +72,7 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, onBack }) => {
                             </div>
                             
                             <ComparisonRow label="月资费" current={user.currentPrice} recommended={recommendedPlan.price} unit="元" />
-                            <ComparisonRow label="近三月ARPU" current={user.arpu3Month} recommended={result.predictedBill} unit="元 (预计)" />
+                            <ComparisonRow label="近三月ARPU" current={user.arpu3Month} recommended={activeResult.predictedBill} unit="元 (预计)" />
                             
                             <ComparisonRow label="流量资源" 
                                 current={`${user.avgData}G (用量)`} 
@@ -127,8 +139,13 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, onBack }) => {
                     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
                         <h3 className="text-sm font-semibold mb-3 text-slate-700">备选方案</h3>
                         <div className="space-y-3">
-                            {result.alternatives.map(plan => (
-                                <div key={plan.id} className="p-3 border border-slate-100 rounded hover:bg-slate-50 transition cursor-pointer">
+                            {activeResult.alternatives.map(plan => (
+                                <button
+                                    key={plan.id}
+                                    type="button"
+                                    onClick={() => handleSelectAlternative(plan.id)}
+                                    className="w-full p-3 border border-slate-100 rounded hover:bg-slate-50 hover:border-brand-200 transition cursor-pointer text-left"
+                                >
                                     <div className="flex justify-between items-center">
                                         <div className="font-medium text-sm text-slate-800">{plan.name}</div>
                                         <div className="text-brand-600 font-bold text-sm">¥{plan.price}</div>
@@ -138,7 +155,7 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, onBack }) => {
                                         <span>{plan.voice}分</span>
                                         {plan.hasBroadband && <span className="bg-blue-50 text-blue-600 px-1 rounded">{plan.broadbandSpeed}M宽</span>}
                                     </div>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     </div>

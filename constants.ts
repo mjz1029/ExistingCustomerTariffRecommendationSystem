@@ -1,4 +1,4 @@
-import { TariffPlan } from './types';
+import type { TariffPlan } from './types';
 
 export const DEFAULT_PLANS: TariffPlan[] = [
   // --- 5G畅享套餐 (个人版 - 无宽带) ---

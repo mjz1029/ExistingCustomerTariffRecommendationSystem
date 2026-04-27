@@ -127,7 +127,7 @@ const App: React.FC = () => {
 
         {/* User Detail View */}
         {activePage === 'user-detail' && selectedResult && (
-            <UserDetail result={selectedResult} onBack={handleBackToDashboard} />
+            <UserDetail result={selectedResult} plans={plans} onBack={handleBackToDashboard} />
         )}
 
         {/* Plans View */}

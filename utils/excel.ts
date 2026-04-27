@@ -1,4 +1,4 @@
-import { UserRecord } from '../types';
+import type { UserRecord } from '../types';
 import { CSV_HEADER_MAP } from '../constants';
 
 declare global {
@@ -6,6 +6,13 @@ declare global {
     XLSX: any;
   }
 }
+
+const normalizeRatio = (value: number): number => {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (value > 1 && Number.isInteger(value) && value <= 100) return value / 100;
+  if (value > 1) return 1;
+  return value;
+};
 
 export const parseExcelFile = (file: File): Promise<UserRecord[]> => {
   return new Promise((resolve, reject) => {
@@ -28,6 +35,9 @@ export const parseExcelFile = (file: File): Promise<UserRecord[]> => {
             // Basic type conversion
             if (['currentPrice', 'arpu3Month', 'avgData', 'avgVoice', 'saturationData', 'saturationVoice', 'overageAmount', 'broadbandSpeed'].includes(enKey)) {
                value = parseFloat(value) || 0;
+            }
+            if (['saturationData', 'saturationVoice'].includes(enKey)) {
+                value = normalizeRatio(value);
             }
             if (['hasBroadband', 'isFTTR'].includes(enKey)) {
                 // Convert "是"/"Yes"/"TRUE" to boolean
@@ -76,7 +86,7 @@ export const generateTemplate = () => {
       '近三个月ARPU': 85.5,
       '流量': 15,
       '通话': 200,
-      '流量饱和度': 1.5,
+      '流量饱和度': 0.95,
       '语音饱和度': 0.8,
       '超套金额': 45,
       '超套比例': 0.5,
@@ -126,7 +136,8 @@ export const exportResults = (results: any[]) => {
         '推荐理由': r.reason,
         'AI话术': r.script,
         '预计账单': r.predictedBill.toFixed(2),
-        '预计节省': r.saveAmount.toFixed(2)
+        '预计节省': r.saveAmount.toFixed(2),
+        '风险等级': r.riskLevel
     }));
 
     const ws = window.XLSX.utils.json_to_sheet(exportData);
