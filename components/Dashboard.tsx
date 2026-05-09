@@ -138,7 +138,7 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
                         <tr>
                             <th className="px-4 py-3 font-semibold text-slate-700">用户</th>
                             <th className="px-4 py-3 font-semibold text-slate-700">推荐方案</th>
-                            <th className="px-4 py-3 font-semibold text-slate-700">审核状态</th>
+                            <th className="px-8 py-3 font-semibold text-slate-700">审核状态</th>
                             <th className="px-4 py-3 font-semibold text-slate-700">核心理由</th>
                             <th className="px-4 py-3 font-semibold text-slate-700 w-24">操作</th>
                         </tr>

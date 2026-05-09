@@ -34,6 +34,7 @@ export interface UserRecord {
 
 export type ReviewStatus = 'pending' | 'accepted' | 'rejected';
 export type SelectionMode = 'auto' | 'manual';
+export type AIProtocol = 'responses' | 'chat-completions';
 
 export interface RecommendationResult {
   id?: string;
@@ -51,4 +52,14 @@ export interface RecommendationResult {
   selectionMode: SelectionMode; // 当前结论是系统推荐还是人工改选
 }
 
-export type PageView = 'home' | 'dashboard' | 'plans' | 'import' | 'user-detail';
+export interface AIProviderConfig {
+  providerName: string;
+  protocol: AIProtocol;
+  baseUrl: string;
+  endpointPath: string;
+  apiKey: string;
+  model: string;
+  enabled: boolean;
+}
+
+export type PageView = 'home' | 'dashboard' | 'plans' | 'import' | 'user-detail' | 'ai-settings';

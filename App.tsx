@@ -5,8 +5,10 @@ import PlanTable from './components/PlanTable';
 import Dashboard from './components/Dashboard';
 import UserDetail from './components/UserDetail';
 import Home from './components/Home';
+import AISettings from './components/AISettings';
 import { generateTemplate, parseExcelFile } from './utils/excel';
 import { runRecommendationEngine } from './services/engine';
+import { loadAIProviderConfig, saveAIProviderConfig } from './services/ai';
 
 const enrichRecommendationResults = (items: RecommendationResult[]): RecommendationResult[] => {
   const batchId = Date.now().toString();
@@ -33,11 +35,16 @@ const App: React.FC = () => {
   const [results, setResults] = useState<RecommendationResult[]>([]);
   const [selectedResult, setSelectedResult] = useState<RecommendationResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [aiConfig, setAIConfig] = useState(() => loadAIProviderConfig());
 
   // --- Persistence ---
   useEffect(() => {
     localStorage.setItem('tariff_plans_v3', JSON.stringify(plans));
   }, [plans]);
+
+  useEffect(() => {
+    saveAIProviderConfig(aiConfig);
+  }, [aiConfig]);
 
   // --- Handlers ---
   const handleAddPlan = (newPlan: Omit<TariffPlan, 'id'>) => {
@@ -101,6 +108,10 @@ const App: React.FC = () => {
     setSelectedResult(updatedResult);
   };
 
+  const handleSaveAIConfig = (nextConfig: typeof aiConfig) => {
+    setAIConfig(nextConfig);
+  };
+
   // --- Navigation & Layout ---
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -110,9 +121,9 @@ const App: React.FC = () => {
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActivePage('home')}>
               <img 
-                src="https://upload.wikimedia.org/wikipedia/commons/0/03/China_Mobile_logo_2013.svg" 
+                src="https://p0.ssl.qhimgs1.com/t01abd3cd02b3b27d20.jpg"
                 alt="China Mobile" 
-                className="h-9 w-auto object-contain"
+                className="h-12 w-auto object-contain"
               />
               <h1 className="text-xl font-bold text-slate-800 tracking-tight">存量用户套餐推荐系统</h1>
             </div>
@@ -122,6 +133,7 @@ const App: React.FC = () => {
                 { id: 'dashboard', label: '分析看板' },
                 { id: 'plans', label: '套餐管理' },
                 { id: 'import', label: '数据导入' },
+                { id: 'ai-settings', label: 'AI 设置' },
               ].map(item => (
                 <button
                   key={item.id}
@@ -158,9 +170,18 @@ const App: React.FC = () => {
             <UserDetail
               result={selectedResult}
               plans={plans}
+              aiConfig={aiConfig}
+              onOpenAISettings={() => setActivePage('ai-settings')}
               onBack={handleBackToDashboard}
               onSaveResult={handleSaveResult}
             />
+        )}
+
+        {activePage === 'ai-settings' && (
+          <AISettings
+            config={aiConfig}
+            onSave={handleSaveAIConfig}
+          />
         )}
 
         {/* Plans View */}
@@ -245,7 +266,7 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center text-sm text-slate-500">
-            <p>&copy; 2025 毛济洲 奇台县移动公司. All rights reserved.</p>
+            <p>&copy; 2025 毛济洲 中国移动昌吉州分公司. All rights reserved.</p>
         </div>
       </footer>
     </div>

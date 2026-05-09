@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import type { RecommendationResult, ReviewStatus, TariffPlan } from '../types';
+import type { AIProviderConfig, RecommendationResult, ReviewStatus, TariffPlan } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { buildRecommendationResultForPlan } from '../services/engine';
+import { generateRecommendationScript } from '../services/ai';
 
 interface UserDetailProps {
     result: RecommendationResult;
     plans: TariffPlan[];
+    aiConfig: AIProviderConfig;
+    onOpenAISettings: () => void;
     onBack: () => void;
     onSaveResult: (result: RecommendationResult) => void;
 }
@@ -16,13 +19,16 @@ const REVIEW_STATUS_META: Record<ReviewStatus, { label: string; className: strin
     rejected: { label: '已驳回', className: 'bg-red-50 text-red-700 border-red-200' },
 };
 
-const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack, onSaveResult }) => {
+const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpenAISettings, onBack, onSaveResult }) => {
     const [activeResult, setActiveResult] = useState(result);
     const [saveMessage, setSaveMessage] = useState('');
+    const [isGeneratingScript, setIsGeneratingScript] = useState(false);
+    const [scriptError, setScriptError] = useState('');
 
     useEffect(() => {
         setActiveResult(result);
         setSaveMessage('');
+        setScriptError('');
     }, [result]);
 
     const { user, recommendedPlan, reason, script, originalRecommendedPlan } = activeResult;
@@ -63,6 +69,21 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack, onSaveRe
         setSaveMessage('');
     };
 
+    const handleGenerateScript = async () => {
+        setIsGeneratingScript(true);
+        setScriptError('');
+        setSaveMessage('');
+
+        try {
+            const generatedScript = await generateRecommendationScript(activeResult, aiConfig);
+            setActiveResult(prev => ({ ...prev, script: generatedScript }));
+        } catch (error) {
+            setScriptError(error instanceof Error ? error.message : 'AI 话术生成失败，请稍后重试。');
+        } finally {
+            setIsGeneratingScript(false);
+        }
+    };
+
     const handleSave = () => {
         onSaveResult(activeResult);
         setSaveMessage('当前结论已保存');
@@ -71,7 +92,8 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack, onSaveRe
     const isDirty = (
         activeResult.recommendedPlan.id !== result.recommendedPlan.id ||
         activeResult.reviewStatus !== result.reviewStatus ||
-        activeResult.reviewNote !== result.reviewNote
+        activeResult.reviewNote !== result.reviewNote ||
+        activeResult.script !== result.script
     );
 
     const ComparisonRow = ({ label, current, recommended, unit = '' }: { label: string, current: string|number, recommended: string|number, unit?: string }) => (
@@ -278,6 +300,48 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, onBack, onSaveRe
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
                             </div>
                             <h3 className="text-lg font-bold text-brand-900">AI 推荐话术</h3>
+                        </div>
+                        <div className="mb-4 space-y-3 rounded-lg border border-brand-100 bg-white/80 p-4">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                                <div className="flex justify-between gap-4">
+                                    <span className="text-slate-500">当前提供商</span>
+                                    <span className="font-medium text-slate-800">{aiConfig.providerName || '未配置'}</span>
+                                </div>
+                                <div className="mt-2 flex justify-between gap-4">
+                                    <span className="text-slate-500">协议</span>
+                                    <span className="font-medium text-slate-800">{aiConfig.protocol}</span>
+                                </div>
+                                <div className="mt-2 flex justify-between gap-4">
+                                    <span className="text-slate-500">模型</span>
+                                    <span className="font-medium text-slate-800">{aiConfig.model || '未配置'}</span>
+                                </div>
+                                <div className="mt-2 flex justify-between gap-4">
+                                    <span className="text-slate-500">状态</span>
+                                    <span className={`font-medium ${aiConfig.enabled ? 'text-green-700' : 'text-amber-700'}`}>
+                                        {aiConfig.enabled ? '已启用' : '未启用（仍可直接生成）'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={handleGenerateScript}
+                                    disabled={isGeneratingScript}
+                                    className="px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isGeneratingScript ? '生成中...' : '生成 AI 话术'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={onOpenAISettings}
+                                    className="px-4 py-2 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-medium"
+                                >
+                                    打开 AI 设置
+                                </button>
+                                {scriptError && (
+                                    <span className="text-xs text-red-600 text-right">{scriptError}</span>
+                                )}
+                            </div>
                         </div>
                         <div className="bg-white border border-brand-100 rounded-md p-4 text-slate-700 leading-relaxed text-sm shadow-sm relative">
                             <svg className="absolute top-2 left-2 w-4 h-4 text-slate-200 transform -scale-x-100" fill="currentColor" viewBox="0 0 24 24"><path d="M14.017 21L14.017 18C14.017 16.8954 13.1216 16 12.017 16H9C9.00001 15 9.00001 14.0007 9 13.0007C9 9.68708 11.6863 7.00073 15 7.00073C15.2956 7.00073 15.5847 7.02651 15.8638 7.07615C16.3129 7.77797 17.0862 8.24354 17.9673 8.24354C19.6241 8.24354 20.9673 6.90039 20.9673 5.24354C20.9673 3.58668 19.6241 2.24354 17.9673 2.24354C16.8687 2.24354 15.9082 2.82772 15.3676 3.71261C14.9366 3.23849 14.3312 2.89862 13.6521 2.76865C13.2982 2.70093 12.9157 2.65682 12.5186 2.65682C6.99577 2.65682 2.51855 7.13404 2.51855 12.6568V15C2.51855 16.1046 3.41399 17 4.51855 17H9C10.1046 17 11 17.8954 11 19V21H14.017Z" /></svg>
