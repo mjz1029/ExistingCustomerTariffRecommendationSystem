@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Users, AlertTriangle, ClipboardCheck, Search, ChevronDown, ArrowRight, Download } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Users, AlertTriangle, ClipboardCheck, Search, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowRight, Download } from 'lucide-react';
 import { RecommendationResult, ReviewStatus } from '../types';
 import { recommendationsApi } from '../services/api';
 
@@ -8,6 +8,9 @@ interface DashboardProps {
   results: RecommendationResult[];
   onViewDetail: (result: RecommendationResult) => void;
 }
+
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
+const DEFAULT_PAGE_SIZE = 20;
 
 const REVIEW_STATUS_META: Record<ReviewStatus, { label: string; dotColor: string; bgColor: string; textColor: string }> = {
   pending: { label: '待确认', dotColor: 'bg-amber-500', bgColor: 'bg-amber-50', textColor: 'text-amber-700' },
@@ -63,9 +66,119 @@ const StatsCard: React.FC<{
   );
 };
 
+/* ── Pagination Component ──────────────────────────────────────── */
+
+const Pagination: React.FC<{
+  current: number;
+  total: number;
+  pageSize: number;
+  pageSizeOptions: number[];
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}> = ({ current, total, pageSize, pageSizeOptions, onPageChange, onPageSizeChange }) => {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // Generate page number buttons (show max 7 around current)
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const pages: (number | '...')[] = [];
+    pages.push(1);
+    if (current > 3) pages.push('...');
+    const start = Math.max(2, current - 1);
+    const end = Math.min(totalPages - 1, current + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < totalPages - 2) pages.push('...');
+    pages.push(totalPages);
+    return pages;
+  };
+
+  const startItem = (current - 1) * pageSize + 1;
+  const endItem = Math.min(current * pageSize, total);
+
+  return (
+    <div className="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="flex items-center gap-3 text-xs text-slate-500">
+        <span>第 {startItem}-{endItem} 条，共 {total.toLocaleString()} 条</span>
+        <div className="relative">
+          <select
+            className="appearance-none pl-2 pr-6 py-1 text-xs border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          >
+            {pageSizeOptions.map(s => (
+              <option key={s} value={s}>每页 {s} 条</option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={current === 1}
+          className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          aria-label="首页"
+        >
+          <ChevronsLeft className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onPageChange(current - 1)}
+          disabled={current === 1}
+          className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          aria-label="上一页"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        {getPageNumbers().map((p, i) =>
+          p === '...' ? (
+            <span key={`ellipsis-${i}`} className="px-1.5 text-slate-400 text-xs">…</span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPageChange(p as number)}
+              className={`min-w-[32px] h-8 text-xs rounded-md transition-colors ${
+                p === current
+                  ? 'bg-brand-600 text-white font-medium shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {p}
+            </button>
+          )
+        )}
+
+        <button
+          onClick={() => onPageChange(current + 1)}
+          disabled={current === totalPages}
+          className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          aria-label="下一页"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onPageChange(totalPages)}
+          disabled={current === totalPages}
+          className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          aria-label="末页"
+        >
+          <ChevronsRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ── Dashboard ─────────────────────────────────────────────────── */
+
 const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
   const [filterProv, setFilterProv] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const stats = useMemo(() => {
     const total = results.length;
@@ -85,6 +198,18 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
       return matchesProv && matchesSearch;
     });
   }, [results, filterProv, searchTerm]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterProv, searchTerm, pageSize]);
+
+  // Paginated slice
+  const totalPages = Math.max(1, Math.ceil(filteredResults.length / pageSize));
+  const paginatedResults = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredResults.slice(start, start + pageSize);
+  }, [filteredResults, currentPage, pageSize]);
 
   const provinces = useMemo(
     () => Array.from(new Set(results.map(r => r.user.province))).filter(Boolean),
@@ -170,7 +295,7 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs text-slate-400 whitespace-nowrap">
-              共 {filteredResults.length} 条结果，推荐 {stats?.planCount ?? 0} 种套餐方案
+              共 {filteredResults.length.toLocaleString()} 条结果，推荐 {stats?.planCount ?? 0} 种套餐方案
             </span>
             <button
               onClick={() => window.open(recommendationsApi.exportUrl())}
@@ -196,14 +321,11 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredResults.map((row, idx) => {
+              {paginatedResults.map((row, idx) => {
                 const saving = row.user.currentPrice - row.recommendedPlan.price;
                 return (
-                  <motion.tr
-                    key={idx}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2, delay: Math.min(idx * 0.015, 0.5) }}
+                  <tr
+                    key={row.id ?? idx}
                     className="group hover:bg-brand-50 transition-colors"
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -265,7 +387,7 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
                         <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover/btn:translate-x-0.5" />
                       </button>
                     </td>
-                  </motion.tr>
+                  </tr>
                 );
               })}
             </tbody>
@@ -274,14 +396,11 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
 
         {/* Mobile Cards */}
         <div className="md:hidden p-4 space-y-3">
-          {filteredResults.map((row, idx) => {
+          {paginatedResults.map((row, idx) => {
             const saving = row.user.currentPrice - row.recommendedPlan.price;
             return (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: idx * 0.03 }}
+              <div
+                key={row.id ?? idx}
                 className="border border-slate-200 rounded-xl overflow-hidden"
               >
                 <div className="px-4 py-3 bg-slate-50 flex items-center justify-between">
@@ -325,10 +444,20 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
                   查看详情
                   <ArrowRight className="w-4 h-4" />
                 </button>
-              </motion.div>
+              </div>
             );
           })}
         </div>
+
+        {/* Pagination */}
+        <Pagination
+          current={currentPage}
+          total={filteredResults.length}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+        />
       </motion.div>
     </div>
   );
