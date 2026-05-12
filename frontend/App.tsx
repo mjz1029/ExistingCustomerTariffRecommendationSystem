@@ -203,7 +203,7 @@ const App: React.FC = () => {
 
           {activePage === 'import' && (
             <PageTransition>
-              <DataImport onImportComplete={handleImportComplete} />
+              <DataImport plans={plans} onImportComplete={handleImportComplete} />
             </PageTransition>
           )}
         </main>
