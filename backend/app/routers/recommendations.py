@@ -215,15 +215,19 @@ def export_results(db: Session = Depends(get_db)):
             r.risk_level,
         ])
 
+    from urllib.parse import quote
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
 
-    filename = f"推荐结果_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    ascii_name = f"recommendations_{date_str}.xlsx"
+    utf8_name = f"推荐结果_{date_str}.xlsx"
+    cd = f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(utf8_name)}'
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": cd},
     )
 
 
