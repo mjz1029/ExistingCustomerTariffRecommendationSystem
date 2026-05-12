@@ -1,142 +1,318 @@
 # 存量用户套餐推荐系统
 
-一个面向存量用户运营场景的本地前端工具，用于批量导入用户清单、维护套餐目录、执行套餐推荐规则，并输出推荐结果、人工校正结论与营销话术。
+> ExistingCustomerTariffRecommendationSystem
 
-项目当前是纯前端实现，数据处理全部在浏览器本地完成，不依赖后端服务。
+面向中国移动存量用户运营场景的全栈推荐系统，用于批量导入用户清单、维护套餐目录、执行智能套餐推荐，并输出推荐结果、人工校正结论与营销话术，帮助一线营销人员高效完成外呼回访工作。
 
-## 适用场景
+## 功能特性
 
-- 对存量用户做批量提档、保有、宽带融合、FTTR 升级推荐
-- 结合用户近三月 ARPU、流量/语音使用情况、超套情况生成推荐结果
-- 给一线人员提供可直接复制的话术和备选方案
-- 导出推荐结果用于外呼、回访或二次分析
-
-## 当前功能
-
-- 首页介绍与操作入口
-- 套餐目录管理
-- 内置默认套餐库，支持新增、编辑、删除、上下架
-- 套餐 Excel 全量导入
-- 套餐导入标准模板下载
-- 套餐导入前提示与导入校验
-- Excel 用户清单导入
-- Excel 模板下载
-- 本地规则引擎自动推荐
-- 分析看板
-- 按地区筛选、按手机号/套餐搜索
-- 推荐结果人工校正
-- 审核状态管理（待确认 / 已接受 / 已驳回）
-- 最终结果导出为 Excel
-- 单用户详情页
-- 推荐理由、风险等级、预计账单、预计节省金额展示
-- 推荐话术自动生成与复制
-- 支持通过自定义 AI 提供商配置生成 AI 话术
-- 备选套餐切换查看
-- 从全部在售套餐中改选最终方案
+- **套餐目录管理**：内置 30 款中国移动 5G 套餐（畅享/全家享爱家版/全光版），支持 Excel 全量导入、新增、编辑、删除、上下架
+- **用户数据导入**：Excel 批量导入用户清单，自动解析字段映射与数据校验
+- **智能推荐引擎**：基于规则的多维度评分算法，自动分群（移动/宽带/FTTR），输出主推荐+最多 3 个备选方案
+- **分析看板**：统计卡片、套餐分布饼图、按地区筛选、按手机号/套餐搜索
+- **人工校正**：支持从全部在售套餐中手动改选最终方案，填写备注，设置审核状态（待确认/已接受/已驳回）
+- **AI 营销话术**：支持配置 OpenAI / Anthropic / 兼容网关，基于用户画像与推荐结果生成自然语言营销话术
+- **结果导出**：导出包含推荐结果、人工校正、审核状态、AI 话术的完整 Excel 报表
 
 ## 技术栈
 
-- React 19
-- TypeScript
-- Vite
-- Recharts
-- Tailwind CSS CDN
-- SheetJS CDN
-
-说明：
-
-- `react`、`react-dom`、`recharts` 通过 import map 加载
-- Excel 解析和导出依赖 `index.html` 中引入的 SheetJS CDN 脚本
-- 当前没有后端、数据库和登录鉴权
+| 层级 | 技术 |
+|------|------|
+| 前端框架 | React 19 + TypeScript 5.8 |
+| 构建工具 | Vite 6.2 |
+| UI 样式 | Tailwind CSS (CDN) |
+| 图表库 | Recharts 3.5 |
+| Excel 处理 | SheetJS (xlsx 0.20.1, CDN) |
+| 后端框架 | FastAPI + Uvicorn |
+| 数据库 | SQLite (SQLAlchemy 2.0 ORM) |
+| HTTP 客户端 | httpx (AI API 调用) |
+| Excel 导出 | openpyxl (服务端导出) |
 
 ## 项目结构
 
-```text
-.
-├── App.tsx                      # 页面编排、状态管理、导航与导入流程
-├── constants.ts                 # 默认套餐、字段映射、用户/套餐导入模板表头
-├── types.ts                     # 核心类型定义
-├── services/
-│   └── engine.ts                # 套餐推荐规则引擎与话术生成
-├── utils/
-│   └── excel.ts                 # 用户/套餐 Excel 解析、模板生成、结果导出
-├── components/
-│   ├── Home.tsx                 # 首页
-│   ├── Dashboard.tsx            # 分析看板
-│   ├── PlanTable.tsx            # 套餐管理
-│   ├── UserDetail.tsx           # 用户详情与备选方案
-│   └── Typewriter.tsx           # 动效组件
-└── scripts/
-    └── recommendation-smoke.ts  # 推荐引擎冒烟校验
+```
+ExistingCustomerTariffRecommendationSystem/
+├── frontend/                     # 前端项目
+│   ├── index.html                # HTML 入口（Tailwind/SheetJS CDN）
+│   ├── index.tsx                 # React 根挂载
+│   ├── App.tsx                   # 主应用组件（路由、状态、数据流）
+│   ├── types.ts                  # TypeScript 类型定义
+│   ├── constants.ts              # 默认套餐、字段映射
+│   ├── services/
+│   │   └── api.ts                # API 客户端
+│   ├── utils/
+│   │   └── excel.ts              # Excel 解析/导出工具
+│   ├── components/
+│   │   ├── Home.tsx              # 首页
+│   │   ├── Dashboard.tsx         # 分析看板
+│   │   ├── PlanTable.tsx         # 套餐管理
+│   │   ├── UserDetail.tsx        # 用户详情
+│   │   ├── AISettings.tsx        # AI 设置
+│   │   └── Typewriter.tsx        # 打字机动效
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vite.config.ts
+│
+├── backend/                      # 后端项目
+│   ├── requirements.txt          # Python 依赖
+│   ├── tariff.db                 # SQLite 数据库文件
+│   └── app/
+│       ├── main.py               # FastAPI 入口
+│       ├── config.py             # 数据库配置
+│       ├── database.py           # SQLAlchemy 引擎/会话
+│       ├── models.py             # ORM 模型
+│       ├── schemas.py            # Pydantic 请求/响应模型
+│       ├── seed.py               # 默认套餐种子数据
+│       ├── routers/
+│       │   ├── plans.py          # 套餐 CRUD + 批量导入
+│       │   ├── users.py          # 用户记录导入
+│       │   ├── recommendations.py # 推荐引擎/结果管理/导出
+│       │   └── ai.py             # AI 配置/话术生成
+│       └── services/
+│           ├── engine.py         # 推荐规则引擎
+│           └── ai_service.py     # AI 提供商集成
+│
+└── README.md                     # 本文件
 ```
 
-## 快速开始
+## 环境要求
 
-### 1. 安装依赖
+| 依赖 | 版本要求 |
+|------|----------|
+| Node.js | >= 18.x (推荐 20.x LTS) |
+| npm | >= 9.x |
+| Python | >= 3.10 (推荐 3.12) |
+| pip | >= 22.x |
+
+## 部署指南
+
+### macOS 部署
+
+#### 1. 安装依赖环境
 
 ```bash
+# 使用 Homebrew 安装 Node.js 和 Python
+brew install node python
+
+# 验证版本
+node -v    # >= 18.x
+python3 --version  # >= 3.10
+```
+
+#### 2. 克隆项目
+
+```bash
+git clone https://github.com/mjz1029/ExistingCustomerTariffRecommendationSystem.git
+cd ExistingCustomerTariffRecommendationSystem
+```
+
+#### 3. 启动后端
+
+```bash
+cd backend
+
+# 创建虚拟环境（推荐）
+python3 -m venv venv
+source venv/bin/activate
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 启动后端服务（默认端口 8000）
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+#### 4. 启动前端（新终端窗口）
+
+```bash
+cd frontend
+
+# 安装依赖
 npm install
-```
 
-### 2. 本地启动
-
-```bash
+# 启动开发服务器（默认端口 3000）
 npm run dev
 ```
 
-### 3. 生产构建
+#### 5. 访问应用
+
+- 前端界面：http://localhost:3000
+- 后端 API 文档：http://localhost:8000/docs
+
+---
+
+### Windows 部署
+
+#### 1. 安装依赖环境
+
+从官网下载安装包：
+- Node.js: https://nodejs.org/ (推荐 LTS 版本)
+- Python: https://www.python.org/ (安装时勾选 "Add Python to PATH")
+
+验证安装：
+```cmd
+node -v
+python --version
+```
+
+#### 2. 克隆项目
+
+```cmd
+git clone https://github.com/mjz1029/ExistingCustomerTariffRecommendationSystem.git
+cd ExistingCustomerTariffRecommendationSystem
+```
+
+#### 3. 启动后端
+
+```cmd
+cd backend
+
+:: 创建虚拟环境
+python -m venv venv
+venv\Scripts\activate
+
+:: 安装依赖
+pip install -r requirements.txt
+
+:: 启动后端服务
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+#### 4. 启动前端（新 CMD/PowerShell 窗口）
+
+```cmd
+cd frontend
+
+:: 安装依赖
+npm install
+
+:: 启动开发服务器
+npm run dev
+```
+
+#### 5. 访问应用
+
+- 前端界面：http://localhost:3000
+- 后端 API 文档：http://localhost:8000/docs
+
+---
+
+### Linux 部署
+
+#### 1. 安装依赖环境
 
 ```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install -y nodejs npm python3 python3-pip python3-venv git
+
+# CentOS/RHEL
+sudo dnf install -y nodejs npm python3 python3-pip git
+
+# 验证版本
+node -v
+python3 --version
+```
+
+#### 2. 克隆项目
+
+```bash
+git clone https://github.com/mjz1029/ExistingCustomerTariffRecommendationSystem.git
+cd ExistingCustomerTariffRecommendationSystem
+```
+
+#### 3. 启动后端
+
+```bash
+cd backend
+
+# 创建虚拟环境
+python3 -m venv venv
+source venv/bin/activate
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 启动后端服务
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+#### 4. 启动前端（新终端窗口）
+
+```bash
+cd frontend
+
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev
+```
+
+#### 5. 访问应用
+
+- 前端界面：http://localhost:3000
+- 后端 API 文档：http://localhost:8000/docs
+
+---
+
+### 生产构建部署
+
+#### 前端构建
+
+```bash
+cd frontend
 npm run build
 ```
 
-### 4. 规则引擎冒烟校验
+构建产物输出到 `frontend/dist/` 目录，可部署到 Nginx、Apache 等静态服务器。
 
-```bash
-npm run check:engine
+#### Nginx 配置示例
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    # 前端静态文件
+    location / {
+        root /path/to/frontend/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 反向代理后端 API
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
 ```
 
-当前已验证：
+#### 后端生产启动
 
-- `npm run build` 可通过
-- `npm run check:engine` 可通过
-
-## AI 话术生成
-
-当前已支持通过独立“AI 设置”页面配置 AI 提供商，并在用户详情页生成更自然的营销话术。
-
-使用方式：
-
-1. 进入顶部导航“AI 设置”
-2. 配置提供商名称、协议类型、基础地址、接口路径、API Key、模型
-3. 支持 `Responses API` 和 `Chat Completions` 两种 OpenAI 协议风格
-4. 保存后进入任一用户详情页，点击“生成 AI 话术”
-5. 确认内容后点击“保存当前结论”，导出时会带出最新话术
-
-说明：
-
-- API Key 和接口配置仅保存在当前浏览器的 `localStorage`
-- 当前支持 OpenAI 官方接口，也支持大多数第三方兼容 OpenAI 协议的接口网关
-- 当前为纯前端直连 API，适合本地工具或内网试用
-- 如果后续要给多人共用，建议改成后端代理，避免在浏览器侧暴露密钥
+```bash
+cd backend
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+```
 
 ## 使用流程
 
-1. 进入“套餐管理”，确认当前可售套餐和宽带/FTTR权益是否准确。
-2. 如需批量维护套餐库，可先下载套餐标准模板并执行全量导入。
-3. 进入“数据导入”，下载用户清单标准模板。
-4. 按模板整理用户清单并上传 Excel。
-5. 系统自动解析并运行推荐引擎。
-6. 在“分析看板”查看批量结果、筛选用户、进入详情页。
-7. 在用户详情页人工改选最终套餐、填写备注、设置审核状态。
-8. 返回看板导出最终确认版结果。
+1. **套餐管理**：进入"套餐管理"页面，确认当前套餐数据是否准确，或通过 Excel 模板批量导入
+2. **下载模板**：进入"数据导入"页面，下载用户清单标准模板
+3. **导入数据**：按模板格式整理用户清单并上传 Excel 文件
+4. **自动推荐**：系统自动解析数据并运行推荐引擎
+5. **查看结果**：在"分析看板"查看批量结果，支持按地区筛选、按手机号/套餐搜索
+6. **人工校正**：进入用户详情页，查看推荐理由、风险等级、预计账单，手动改选方案或设置审核状态
+7. **AI 话术**（可选）：在"AI 设置"中配置 AI 提供商后，可在用户详情页生成 AI 营销话术
+8. **导出结果**：返回看板导出最终确认版 Excel 报表
 
 ## 用户 Excel 导入字段
 
 ### 必填字段
 
 | 字段名 | 说明 |
-| --- | --- |
+|--------|------|
 | 联系电话 | 用户唯一标识 |
 | 档位 | 当前套餐月费 |
 | 近三个月ARPU | 用户近三个月平均消费 |
@@ -146,7 +322,7 @@ npm run check:engine
 ### 可选字段
 
 | 字段名 | 说明 |
-| --- | --- |
+|--------|------|
 | 归属地 | 省/市/区域 |
 | 主套餐 | 当前套餐名称 |
 | 流量饱和度 | 0-1 小数，也兼容 0-100 整数百分比 |
@@ -158,195 +334,30 @@ npm run check:engine
 | 是否FTTR | 是/否 |
 | 备注 | 其他说明 |
 
-## 套餐 Excel 导入字段
+## 推荐引擎逻辑
 
-### 必填字段
+推荐引擎采用多维度加权评分算法：
 
-| 字段名 | 说明 |
-| --- | --- |
-| 套餐编码 | 套餐唯一标识，建议使用资费系统编码 |
-| 套餐名称 | 推荐与展示名称 |
-| 资费 | 月费，数值类型 |
-| 流量 | 套餐流量，单位 GB |
-| 语音 | 套餐语音分钟数 |
-| 是否含宽带 | 是/否 |
+1. **数据归一化**：对导入的用户数据做标准化和兜底处理
+2. **用户分群**：根据套餐名称、类型、宽带/FTTR 信息推断用户所属分群（mobile/broadband/fttr）
+3. **候选筛选**：在同分群可售套餐中筛选，执行"不降档"规则
+4. **幅度控制**：根据分群和使用饱和度设置价格跳档上限
+5. **评分排序**：综合价格差、资源缺口、资源浪费、宽带速率变化进行加权评分
+6. **结果输出**：主推荐套餐 + 最多 3 个备选方案 + 推荐理由 + 风险等级 + 模板话术
 
-### 可选字段
+## API 接口
 
-| 字段名 | 说明 |
-| --- | --- |
-| 宽带速率 | Mbps，无宽带填写 0 |
-| 是否FTTR | 是/否 |
-| 其他权益 | 会员、云存、安防等备注 |
-| 是否上架 | 是/否，默认是 |
+后端提供以下 RESTful API（详细文档访问 http://localhost:8000/docs）：
 
-### 套餐导入规则
+| 模块 | 路径前缀 | 说明 |
+|------|----------|------|
+| 套餐管理 | `/api/v1/plans` | 套餐 CRUD、Excel 批量导入 |
+| 用户导入 | `/api/v1/users` | 批量导入用户记录 |
+| 推荐结果 | `/api/v1/recommendations` | 运行引擎、查看/更新/导出结果 |
+| AI 服务 | `/api/v1/ai` | AI 配置管理、连接测试、话术生成 |
 
-- 默认读取 Excel 第一个工作表
-- 导入为全量覆盖，不做增量合并
-- 导入成功后会替换当前本地套餐库
-- 导入成功后会清空当前推荐结果，需要重新导入用户数据分析
-- 系统会校验缺失表头、重复套餐编码、非法数值、宽带速率和 FTTR 约束
+## 许可证
 
-## 推荐规则概览
+本项目采用 [MIT License](LICENSE) 开源许可证。
 
-当前推荐引擎主要基于以下逻辑：
-
-- 先对用户数据做归一化和兜底处理
-- 根据当前套餐名称、套餐类型、宽带/FTTR信息推断用户所属分群
-- 在同分群的可售套餐中筛选候选
-- 宽带用户优先保留宽带权益，FTTR 用户优先保留 FTTR
-- 根据当前资费、ARPU、超套、饱和度控制允许提档幅度
-- 综合价格差、资源缺口、资源浪费、宽带速率变化做评分排序
-- 输出主推荐套餐、最多 3 个备选套餐、推荐理由和风险等级
-
-当前分群包括：
-
-- `mobile`：纯移动套餐
-- `broadband`：带宽带的融合套餐
-- `fttr`：全光 WiFi / FTTR 套餐
-
-## 输出结果
-
-每个用户的推荐结果包含：
-
-- 当前信息与推荐套餐
-- 系统初始推荐套餐
-- 最终确认套餐
-- 推荐理由
-- 预计账单
-- 预计节省金额
-- 风险等级
-- 审核状态
-- 审核备注
-- 是否人工校正
-- 外呼营销话术
-- 备选方案
-
-导出的 Excel 当前包含：
-
-- 联系电话
-- 归属地
-- 当前套餐/档位
-- 系统初始推荐/档位
-- 当前宽带
-- 最终推荐套餐/档位
-- 最终推荐宽带
-- 是否人工校正
-- 审核状态
-- 审核备注
-- 推荐理由
-- AI话术
-- 预计账单
-- 预计节省
-- 风险等级
-
-## 已知限制
-
-- 套餐库当前写在前端常量中，并通过浏览器 `localStorage` 持久化，不适合多人协同维护
-- 没有登录、权限、操作日志和审批机制
-- 没有接入真实 CRM、BSS、宽带资源或工单系统
-- 推荐规则仍是启发式规则，不是可解释的策略配置平台
-- 话术是模板拼接，不是大模型实时生成
-- 大批量 Excel 导入时，性能和浏览器内存上限需要进一步验证
-- 生产构建存在单包较大的告警，后续可以做拆包优化
-
-## 当前已完成的关键能力
-
-- 推荐结果人工校正
-- 审核状态管理与备注记录
-- 最终确认版结果导出
-- 套餐 Excel 全量导入
-- 套餐导入模板下载与上传前提示
-- 套餐导入字段校验
-
-## 建议下一步补充的功能
-
-### P0：导入错误明细导出
-
-现在解析失败只弹一个通用提示，定位成本高。建议增加：
-
-- 缺失字段提示
-- 错误行号提示
-- 异常值提示，例如负数资费、超大饱和度、宽带速率缺失
-- 可下载的错误明细表
-
-这会显著降低使用门槛。
-
-### P1：推荐策略可配置
-
-当前推荐规则写死在代码里。建议把以下参数配置化：
-
-- 最大提档幅度
-- 不同分群的预算上限
-- 流量/语音权重
-- 风险等级阈值
-- 宽带/FTTR 的保留策略
-
-后续可以做成“运营策略面板”。
-
-### P1：看板增加运营视角指标
-
-当前看板偏基础，建议增加：
-
-- 按档位段分布
-- 按推荐类型分布，例如保有、提档、融合、FTTR升级
-- 预计增收/保收金额
-- 高风险用户清单
-- 按地区、套餐类型、宽带状态的交叉筛选
-
-### P1：结果追踪
-
-如果这个工具后续要真正用于业务闭环，建议补：
-
-- 外呼状态
-- 办理成功/失败结果
-- 失败原因分类
-- 推荐命中率和转化率统计
-
-没有这部分，就很难反向验证推荐策略是否有效。
-
-### P2：套餐库版本化
-
-当前已经支持套餐 Excel 全量导入，但后续还可以继续补：
-
-- 套餐版本管理
-- 上下架生效时间
-- 区域差异套餐
-- 导入历史追踪
-
-## 后续开发方向
-
-如果要把这个项目从“演示型工具”推进到“可落地业务工具”，建议按下面顺序演进：
-
-1. 先补导入校验、人工校正、结果状态管理
-2. 再把推荐规则做成可配置策略
-3. 再接套餐库版本化和业务结果追踪
-4. 最后再考虑后端化、权限化、系统对接
-
-## License
-本项目采用**MIT开源许可证**（MIT License），详见LICENSE文件。以下是许可证核心内容：
-
-```
-MIT License
-
-Copyright (c) 2026 JizhouMao
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+Copyright (c) 2026 JizhouMao, China Mobile Changji Prefecture Branch
