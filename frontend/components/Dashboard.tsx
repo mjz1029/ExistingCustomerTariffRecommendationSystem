@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, AlertTriangle, ClipboardCheck, Search, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowRight, Download } from 'lucide-react';
 import { RecommendationResult, ReviewStatus } from '../types';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { recommendationsApi } from '../services/api';
 
 interface DashboardProps {
@@ -11,6 +12,7 @@ interface DashboardProps {
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
 const DEFAULT_PAGE_SIZE = 20;
+const COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const REVIEW_STATUS_META: Record<ReviewStatus, { label: string; dotColor: string; bgColor: string; textColor: string }> = {
   pending: { label: '待确认', dotColor: 'bg-amber-500', bgColor: 'bg-amber-50', textColor: 'text-amber-700' },
@@ -186,7 +188,15 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
     const riskHigh = results.filter(r => r.riskLevel === 'high').length;
     const pendingCount = results.filter(r => r.reviewStatus === 'pending').length;
     const planCount = new Set(results.map(r => r.recommendedPlan.name)).size;
-    return { total, riskHigh, pendingCount, planCount };
+    const distMap: Record<string, number> = {};
+    results.forEach(r => {
+      distMap[r.recommendedPlan.name] = (distMap[r.recommendedPlan.name] || 0) + 1;
+    });
+    const distData = Object.keys(distMap)
+      .map(k => ({ name: k, value: distMap[k] }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+    return { total, riskHigh, pendingCount, planCount, distData };
   }, [results]);
 
   const filteredResults = useMemo(() => {
@@ -260,6 +270,61 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
           delay={0.16}
         />
       </div>
+
+      {/* Pie Chart */}
+      {stats?.distData && stats.distData.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="bg-white rounded-xl shadow-sm border border-slate-200 p-5"
+        >
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">推荐套餐分布 (Top 5)</h3>
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            <div className="w-48 h-48 shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stats.distData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={45}
+                    outerRadius={75}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {stats.distData.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    content={({ active, payload }: any) => {
+                      if (!active || !payload?.length) return null;
+                      return (
+                        <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-100 text-xs">
+                          <p className="font-medium text-slate-800">{payload[0].name}</p>
+                          <p className="text-slate-500 mt-0.5">
+                            <span className="font-semibold text-brand-600">{payload[0].value}</span> 个用户
+                          </p>
+                        </div>
+                      );
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap gap-x-5 gap-y-2 justify-center sm:justify-start">
+              {stats.distData.map((d, i) => (
+                <div key={d.name} className="flex items-center gap-2 text-sm text-slate-600">
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
+                  <span className="truncate max-w-[120px]">{d.name}</span>
+                  <span className="text-slate-400 text-xs">{d.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Table Container */}
       <motion.div
