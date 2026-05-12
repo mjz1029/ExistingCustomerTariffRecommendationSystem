@@ -272,59 +272,79 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
       </div>
 
       {/* Pie Chart */}
-      {stats?.distData && stats.distData.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.15 }}
-          className="bg-white rounded-xl shadow-sm border border-slate-200 p-5"
-        >
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">推荐套餐分布 (Top 5)</h3>
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="w-48 h-48 shrink-0 sm:w-56 sm:h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stats.distData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={45}
-                    outerRadius={75}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {stats.distData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    content={({ active, payload }: any) => {
-                      if (!active || !payload?.length) return null;
-                      return (
-                        <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-100 text-xs">
-                          <p className="font-medium text-slate-800">{payload[0].name}</p>
-                          <p className="text-slate-500 mt-0.5">
-                            <span className="font-semibold text-brand-600">{payload[0].value}</span> 个用户
-                          </p>
-                        </div>
-                      );
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+      {stats?.distData && stats.distData.length > 0 && (() => {
+        const total = stats.distData.reduce((s, d) => s + d.value, 0);
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+            className="bg-white rounded-xl shadow-sm border border-slate-200 p-6"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-sm font-semibold text-slate-700">推荐套餐分布</h3>
+              <span className="text-xs text-slate-400">Top 5 套餐方案</span>
             </div>
-            <div className="grid grid-cols-1 gap-2 min-w-0 flex-1">
-              {stats.distData.map((d, i) => (
-                <div key={d.name} className="flex items-center gap-2 text-sm text-slate-600 min-w-0">
-                  <span className="w-3 h-3 rounded-full shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
-                  <span className="truncate">{d.name}</span>
-                  <span className="text-slate-400 text-xs shrink-0 ml-auto">{d.value}人</span>
+
+            {/* Chart + center label */}
+            <div className="flex justify-center">
+              <div className="relative w-52 h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={stats.distData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={65}
+                      outerRadius={95}
+                      paddingAngle={3}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {stats.distData.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (!active || !payload?.length) return null;
+                        const pct = ((payload[0].value / total) * 100).toFixed(1);
+                        return (
+                          <div className="bg-slate-900 text-white px-3 py-2 rounded-lg shadow-xl text-xs">
+                            <p className="font-medium">{payload[0].name}</p>
+                            <p className="text-slate-300 mt-0.5">{payload[0].value} 人 · {pct}%</p>
+                          </div>
+                        );
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Center label */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-2xl font-bold text-slate-800">{total.toLocaleString()}</span>
+                  <span className="text-xs text-slate-400 mt-0.5">总推荐</span>
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
-        </motion.div>
-      )}
+
+            {/* Legend as horizontal items */}
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {stats.distData.map((d, i) => {
+                const pct = ((d.value / total) * 100).toFixed(1);
+                return (
+                  <div key={d.name} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-slate-700 truncate">{d.name}</div>
+                      <div className="text-xs text-slate-400">{d.value}人 · {pct}%</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        );
+      })()}
 
       {/* Table Container */}
       <motion.div
