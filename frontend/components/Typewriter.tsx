@@ -8,12 +8,12 @@ interface TypewriterProps {
   pauseDuration?: number;
 }
 
-const Typewriter: React.FC<TypewriterProps> = ({ 
-  fixedText, 
-  rotatingTexts, 
-  typingSpeed = 150, 
+const Typewriter: React.FC<TypewriterProps> = ({
+  fixedText,
+  rotatingTexts,
+  typingSpeed = 150,
   deletingSpeed = 100,
-  pauseDuration = 2000 
+  pauseDuration = 2000,
 }) => {
   const [displayText, setDisplayText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -25,7 +25,7 @@ const Typewriter: React.FC<TypewriterProps> = ({
 
     const handleTyping = () => {
       const fullText = rotatingTexts[currentIndex];
-      
+
       if (isDeleting) {
         setDisplayText(fullText.substring(0, displayText.length - 1));
         setSpeed(deletingSpeed);
@@ -34,13 +34,11 @@ const Typewriter: React.FC<TypewriterProps> = ({
         setSpeed(typingSpeed);
       }
 
-      // Check if finished typing
       if (!isDeleting && displayText === fullText) {
         setTimeout(() => setIsDeleting(true), pauseDuration);
         return;
       }
 
-      // Check if finished deleting
       if (isDeleting && displayText === '') {
         setIsDeleting(false);
         setCurrentIndex((prev) => (prev + 1) % rotatingTexts.length);
@@ -48,15 +46,14 @@ const Typewriter: React.FC<TypewriterProps> = ({
     };
 
     timer = window.setTimeout(handleTyping, speed);
-
     return () => clearTimeout(timer);
   }, [displayText, isDeleting, currentIndex, rotatingTexts, typingSpeed, deletingSpeed, pauseDuration, speed]);
 
   return (
-    <div className="font-mono text-4xl md:text-6xl font-bold text-slate-800 tracking-tight">
-      <span>{fixedText}</span>
-      <span className="text-brand-600 border-b-4 border-brand-400 pb-1 ml-2">{displayText}</span>
-      <span className="cursor-blink text-brand-600">|</span>
+    <div className="font-mono text-4xl md:text-6xl font-bold text-white tracking-tight">
+      {fixedText && <span>{fixedText}</span>}
+      <span className="text-brand-300 border-b-4 border-brand-400 pb-1 ml-2">{displayText}</span>
+      <span className="cursor-blink text-brand-300">|</span>
     </div>
   );
 };

@@ -1,62 +1,243 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion, useInView } from 'framer-motion';
+import { BarChart3, Brain, Sparkles, ArrowRight } from 'lucide-react';
 import Typewriter from './Typewriter';
 
 interface HomeProps {
   onStart: () => void;
 }
 
+/* ── Animated Counter ───────────────────────────────────────────── */
+
+function AnimatedCounter({ target, suffix = '' }: { target: number; suffix?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!inView) return;
+    let start = 0;
+    const duration = 1600;
+    const step = (ts: number) => {
+      if (!start) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      setCount(Math.round(eased * target));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [inView, target]);
+
+  return (
+    <span ref={ref} className="tabular-nums">
+      {count.toLocaleString()}{suffix}
+    </span>
+  );
+}
+
+/* ── Stat Card ──────────────────────────────────────────────────── */
+
+interface StatProps {
+  value: number;
+  suffix: string;
+  label: string;
+  delay: number;
+}
+
+function StatCard({ value, suffix, label, delay }: StatProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 32 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-60px' }}
+      transition={{ duration: 0.5, delay }}
+      className="bg-white rounded-2xl shadow-md p-8 text-center"
+    >
+      <div className="text-4xl md:text-5xl font-extrabold text-brand-600 mb-2">
+        <AnimatedCounter target={value} suffix={suffix} />
+      </div>
+      <p className="text-slate-500 text-sm font-medium">{label}</p>
+    </motion.div>
+  );
+}
+
+/* ── Feature Card ───────────────────────────────────────────────── */
+
+interface FeatureProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  delay: number;
+}
+
+function FeatureCard({ icon, title, description, delay }: FeatureProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 40 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-60px' }}
+      transition={{ duration: 0.5, delay }}
+      whileHover={{ y: -8 }}
+      className="group bg-white rounded-xl shadow-md p-8 transition-shadow hover:shadow-xl cursor-default"
+    >
+      <div className="w-14 h-14 rounded-xl bg-brand-50 text-brand-500 flex items-center justify-center mb-5 transition-colors group-hover:bg-brand-500 group-hover:text-white">
+        {icon}
+      </div>
+      <h3 className="text-lg font-bold text-slate-800 mb-2">{title}</h3>
+      <p className="text-sm text-slate-500 leading-relaxed">{description}</p>
+    </motion.div>
+  );
+}
+
+/* ── Home Page ──────────────────────────────────────────────────── */
+
 const Home: React.FC<HomeProps> = ({ onStart }) => {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-140px)] text-center px-4 animate-fade-in-up">
-      <div className="mb-12">
-        <div className="mb-4 inline-block px-3 py-1 rounded-full bg-brand-50 text-brand-700 text-sm font-semibold border border-brand-100">
-           ✨ 全新一代存量经营工具
-        </div>
-        <Typewriter 
-          fixedText="让存量经营" 
-          rotatingTexts={['更智能', '更精准', '更高效', '更有价值']} 
+    <div className="flex flex-col -mx-4 sm:-mx-6 lg:-mx-8 -mt-8">
+
+      {/* ── Hero ─────────────────────────────────────────────── */}
+      <section className="relative min-h-[60vh] md:min-h-[80vh] flex items-center justify-center overflow-hidden bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900">
+        {/* dot pattern overlay */}
+        <div
+          className="absolute inset-0 opacity-[0.10]"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle, #fff 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+          }}
         />
-        <p className="mt-6 text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
-          基于多维度用户画像与智能规则引擎，为您的一线营销团队提供最精准的套餐适配建议。
-          <br/>拒绝盲目推销，让每一次触达都切中用户需求。
-        </p>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16 w-full max-w-5xl">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center mb-4 mx-auto">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-          </div>
-          <h3 className="font-bold text-slate-800 mb-2">数据驱动分析</h3>
-          <p className="text-sm text-slate-500">整合ARPU、流量、语音、宽带等多维数据，全方位评估用户价值与需求。</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-          <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center mb-4 mx-auto">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-          </div>
-          <h3 className="font-bold text-slate-800 mb-2">智能推荐引擎</h3>
-          <p className="text-sm text-slate-500">基于"绝不降档"与"资源适配"原则，自动计算最优套餐方案，平衡用户体验与公司收益。</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-          <div className="w-12 h-12 bg-green-50 text-green-600 rounded-lg flex items-center justify-center mb-4 mx-auto">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
-          </div>
-          <h3 className="font-bold text-slate-800 mb-2">AI 营销赋能</h3>
-          <p className="text-sm text-slate-500">自动生成针对性营销话术，突出升级利益点（如提速、权益），提升外呼成功率。</p>
-        </div>
-      </div>
+        <div className="relative z-10 text-center px-6 py-20 max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="inline-block mb-6 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm text-white/90 text-sm font-medium border border-white/15"
+          >
+            全新一代存量经营工具
+          </motion.div>
 
-      <button 
-        onClick={onStart}
-        className="group relative px-8 py-4 bg-brand-600 text-white font-bold text-lg rounded-full shadow-lg hover:bg-brand-700 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
-      >
-        开始使用
-        <svg className="w-5 h-5 inline-block ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
-      </button>
-      
-      <p className="mt-8 text-xs text-slate-400">
-        本地化处理 · 数据不出网 · 安全可靠
-      </p>
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.15 }}
+          >
+            <Typewriter
+              fixedText=""
+              rotatingTexts={[
+                '让存量经营更智能',
+                '让套餐推荐更精准',
+                '让营销服务更高效',
+                '让客户体验更有价值',
+              ]}
+            />
+          </motion.div>
+
+          <motion.p
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="mt-6 text-lg text-brand-100/80 max-w-2xl mx-auto leading-relaxed"
+          >
+            基于多维度用户画像与智能规则引擎，为您的一线营销团队提供最精准的套餐适配建议。
+            <br className="hidden sm:block" />
+            拒绝盲目推销，让每一次触达都切中用户需求。
+          </motion.p>
+
+          <motion.button
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.45 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onStart}
+            className="mt-10 inline-flex items-center gap-2 px-8 py-4 bg-white text-brand-700 font-bold text-lg rounded-full shadow-lg hover:shadow-xl transition-shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/60 focus:ring-offset-brand-800"
+          >
+            开始使用
+            <ArrowRight className="w-5 h-5" />
+          </motion.button>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.65 }}
+            className="mt-8 text-xs text-white/40"
+          >
+            本地化处理 · 数据不出网 · 安全可靠
+          </motion.p>
+        </div>
+      </section>
+
+      {/* ── Stats ────────────────────────────────────────────── */}
+      <section className="bg-slate-50 py-20 px-6">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+          <StatCard value={10000} suffix="+" label="已服务用户" delay={0} />
+          <StatCard value={95} suffix="%" label="推荐准确率" delay={0.1} />
+          <StatCard value={300} suffix="%" label="效率提升" delay={0.2} />
+        </div>
+      </section>
+
+      {/* ── Features ─────────────────────────────────────────── */}
+      <section className="bg-white py-20 px-6">
+        <div className="max-w-6xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-14"
+          >
+            <h2 className="text-3xl font-extrabold text-slate-800">核心功能</h2>
+            <p className="mt-3 text-slate-500">三大能力，驱动存量经营全面升级</p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            <FeatureCard
+              icon={<BarChart3 className="w-7 h-7" />}
+              title="数据驱动分析"
+              description="整合 ARPU、流量、语音、宽带等多维数据，全方位评估用户价值与需求，让决策有据可依。"
+              delay={0}
+            />
+            <FeatureCard
+              icon={<Brain className="w-7 h-7" />}
+              title="智能推荐引擎"
+              description="基于「绝不降档」与「资源适配」原则，自动计算最优套餐方案，平衡用户体验与公司收益。"
+              delay={0.1}
+            />
+            <FeatureCard
+              icon={<Sparkles className="w-7 h-7" />}
+              title="AI 营销赋能"
+              description="自动生成针对性营销话术，突出升级利益点，提升外呼成功率与客户满意度。"
+              delay={0.2}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Footer CTA ───────────────────────────────────────── */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 py-20 px-6 text-center">
+        <div
+          className="absolute inset-0 opacity-[0.08]"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle, #fff 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+          }}
+        />
+        <div className="relative z-10 max-w-2xl mx-auto">
+          <h2 className="text-3xl font-extrabold text-white mb-4">准备好开始了吗？</h2>
+          <p className="text-brand-100/70 mb-8">只需一步，开启智能存量经营之旅</p>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onStart}
+            className="inline-flex items-center gap-2 px-8 py-4 bg-white text-brand-700 font-bold text-lg rounded-full shadow-lg hover:shadow-xl transition-shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/60 focus:ring-offset-brand-800"
+          >
+            立即体验
+            <ArrowRight className="w-5 h-5" />
+          </motion.button>
+        </div>
+      </section>
     </div>
   );
 };
