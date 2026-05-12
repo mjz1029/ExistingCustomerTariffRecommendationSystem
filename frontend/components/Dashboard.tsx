@@ -2,7 +2,6 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, AlertTriangle, ClipboardCheck, Search, ChevronDown, ArrowRight, Download } from 'lucide-react';
 import { RecommendationResult, ReviewStatus } from '../types';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { recommendationsApi } from '../services/api';
 
 interface DashboardProps {
@@ -10,7 +9,6 @@ interface DashboardProps {
   onViewDetail: (result: RecommendationResult) => void;
 }
 
-const COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
 const REVIEW_STATUS_META: Record<ReviewStatus, { label: string; dotColor: string; bgColor: string; textColor: string }> = {
   pending: { label: '待确认', dotColor: 'bg-amber-500', bgColor: 'bg-amber-50', textColor: 'text-amber-700' },
   accepted: { label: '已接受', dotColor: 'bg-green-500', bgColor: 'bg-green-50', textColor: 'text-green-700' },
@@ -18,55 +16,27 @@ const REVIEW_STATUS_META: Record<ReviewStatus, { label: string; dotColor: string
 };
 
 // Animated counter hook
-function useAnimatedCounter(target: number, duration: number = 1500) {
+function useAnimatedCounter(target: number, duration: number = 1200) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    if (target === 0) {
-      setCount(0);
-      return;
-    }
-
+    if (target === 0) { setCount(0); return; }
     let startTime: number | null = null;
-    let animationFrame: number;
-
-    const animate = (currentTime: number) => {
-      if (!startTime) startTime = currentTime;
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-
-      // Ease out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCount(Math.floor(eased * target));
-
-      if (progress < 1) {
-        animationFrame = requestAnimationFrame(animate);
-      }
+    let frame: number;
+    const animate = (now: number) => {
+      if (!startTime) startTime = now;
+      const progress = Math.min((now - startTime) / duration, 1);
+      setCount(Math.floor((1 - Math.pow(1 - progress, 3)) * target));
+      if (progress < 1) frame = requestAnimationFrame(animate);
     };
-
-    animationFrame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationFrame);
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
   }, [target, duration]);
 
   return count;
 }
 
-// Custom tooltip for pie chart
-const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white px-4 py-3 rounded-xl shadow-lg border border-slate-100">
-        <p className="font-medium text-slate-800">{payload[0].name}</p>
-        <p className="text-sm text-slate-500 mt-1">
-          <span className="font-semibold text-brand-600">{payload[0].value}</span> 个用户
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
-
-// Stats card component
+// Compact stats card
 const StatsCard: React.FC<{
   title: string;
   value: number;
@@ -74,24 +44,20 @@ const StatsCard: React.FC<{
   gradient: string;
   delay: number;
 }> = ({ title, value, icon, gradient, delay }) => {
-  const animatedValue = useAnimatedCounter(value);
-
+  const animated = useAnimatedCounter(value);
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
-      whileHover={{ y: -4, transition: { duration: 0.2 } }}
-      className={`${gradient} rounded-xl p-6 text-white shadow-lg cursor-default`}
+      transition={{ duration: 0.5, delay }}
+      className={`${gradient} rounded-xl px-5 py-4 text-white shadow-lg`}
     >
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium opacity-90">{title}</p>
-          <p className="text-3xl font-bold mt-2">{animatedValue.toLocaleString()}</p>
+          <p className="text-xs font-medium opacity-80">{title}</p>
+          <p className="text-2xl font-bold mt-1">{animated.toLocaleString()}</p>
         </div>
-        <div className="p-3 bg-white/20 rounded-lg">
-          {icon}
-        </div>
+        <div className="p-2.5 bg-white/20 rounded-lg">{icon}</div>
       </div>
     </motion.div>
   );
@@ -104,21 +70,10 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
   const stats = useMemo(() => {
     const total = results.length;
     if (total === 0) return null;
-
     const riskHigh = results.filter(r => r.riskLevel === 'high').length;
     const pendingCount = results.filter(r => r.reviewStatus === 'pending').length;
-
-    // Distribution by recommended plan
-    const distMap: Record<string, number> = {};
-    results.forEach(r => {
-      distMap[r.recommendedPlan.name] = (distMap[r.recommendedPlan.name] || 0) + 1;
-    });
-    const distData = Object.keys(distMap)
-      .map(k => ({ name: k, value: distMap[k] }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-
-    return { total, riskHigh, pendingCount, distData };
+    const planCount = new Set(results.map(r => r.recommendedPlan.name)).size;
+    return { total, riskHigh, pendingCount, planCount };
   }, [results]);
 
   const filteredResults = useMemo(() => {
@@ -131,7 +86,6 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
     });
   }, [results, filterProv, searchTerm]);
 
-  // Unique provinces for filter
   const provinces = useMemo(
     () => Array.from(new Set(results.map(r => r.user.province))).filter(Boolean),
     [results]
@@ -156,166 +110,145 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatsCard
           title="总用户数"
           value={stats?.total ?? 0}
-          icon={<Users className="w-6 h-6 text-white" />}
+          icon={<Users className="w-5 h-5 text-white" />}
           gradient="bg-gradient-to-br from-brand-500 to-brand-600"
           delay={0}
         />
         <StatsCard
           title="高风险用户"
           value={stats?.riskHigh ?? 0}
-          icon={<AlertTriangle className="w-6 h-6 text-white" />}
+          icon={<AlertTriangle className="w-5 h-5 text-white" />}
           gradient="bg-gradient-to-br from-amber-500 to-amber-600"
-          delay={0.1}
+          delay={0.08}
         />
         <StatsCard
           title="待审核"
           value={stats?.pendingCount ?? 0}
-          icon={<ClipboardCheck className="w-6 h-6 text-white" />}
+          icon={<ClipboardCheck className="w-5 h-5 text-white" />}
           gradient="bg-gradient-to-br from-purple-500 to-purple-600"
-          delay={0.2}
+          delay={0.16}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6, delay: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200"
-        >
-          <h3 className="text-sm font-semibold text-slate-800 mb-4">推荐套餐分布 (Top 5)</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={stats?.distData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {stats?.distData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex flex-wrap gap-3 justify-center mt-4">
-            {stats?.distData.map((d, i) => (
-              <div key={d.name} className="flex items-center text-xs text-slate-600">
-                <span
-                  className="w-2.5 h-2.5 rounded-full mr-1.5"
-                  style={{ background: COLORS[i % COLORS.length] }}
-                />
-                {d.name}
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Table & Controls */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col"
-        >
-          {/* Filter Bar */}
-          <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center">
-            <div className="flex flex-col sm:flex-row gap-2 flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="搜索手机号/套餐..."
-                  className="w-full sm:w-56 pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <div className="relative">
-                <select
-                  className="appearance-none w-full sm:w-auto pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all bg-white"
-                  value={filterProv}
-                  onChange={(e) => setFilterProv(e.target.value)}
-                >
-                  <option value="all">所有地区</option>
-                  {provinces.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              </div>
+      {/* Table Container */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="bg-white rounded-xl shadow-sm border border-slate-200"
+      >
+        {/* Filter Bar */}
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center">
+          <div className="flex flex-col sm:flex-row gap-2 flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="搜索手机号/套餐..."
+                className="w-full sm:w-56 pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
+            <div className="relative">
+              <select
+                className="appearance-none w-full sm:w-auto pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all bg-white"
+                value={filterProv}
+                onChange={(e) => setFilterProv(e.target.value)}
+              >
+                <option value="all">所有地区</option>
+                {provinces.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-400 whitespace-nowrap">
+              共 {filteredResults.length} 条结果，推荐 {stats?.planCount ?? 0} 种套餐方案
+            </span>
             <button
               onClick={() => window.open(recommendationsApi.exportUrl())}
-              className="flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm px-4 py-2 rounded-lg transition-colors shadow-sm"
+              className="flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm px-4 py-2 rounded-lg transition-colors shadow-sm whitespace-nowrap"
             >
               <Download className="w-4 h-4" />
-              导出最终结果
+              导出结果
             </button>
           </div>
+        </div>
 
-          {/* Desktop Table */}
-          <div className="hidden md:block overflow-auto custom-scroll flex-1 max-h-[500px]">
-            <table className="w-full text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 sticky top-0 z-10">
-                <tr>
-                  <th className="px-4 py-3 font-semibold text-slate-700">用户</th>
-                  <th className="px-4 py-3 font-semibold text-slate-700">推荐方案</th>
-                  <th className="px-6 py-3 font-semibold text-slate-700">审核状态</th>
-                  <th className="px-4 py-3 font-semibold text-slate-700">核心理由</th>
-                  <th className="px-4 py-3 font-semibold text-slate-700 w-24">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredResults.map((row, idx) => (
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-600">
+            <thead className="bg-slate-50 sticky top-0 z-10">
+              <tr>
+                <th className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">用户信息</th>
+                <th className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">推荐方案</th>
+                <th className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">价格对比</th>
+                <th className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">审核状态</th>
+                <th className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">推荐理由</th>
+                <th className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredResults.map((row, idx) => {
+                const saving = row.user.currentPrice - row.recommendedPlan.price;
+                return (
                   <motion.tr
                     key={idx}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ duration: 0.3, delay: idx * 0.02 }}
-                    className={`group hover:bg-brand-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                    transition={{ duration: 0.2, delay: Math.min(idx * 0.015, 0.5) }}
+                    className="group hover:bg-brand-50 transition-colors"
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <div className="font-medium text-slate-900">
                         {row.user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}
                       </div>
                       <div className="text-xs text-slate-500">
-                        现: {row.user.currentPrice}元 | {row.user.hasBroadband ? `${row.user.broadbandSpeed}M宽` : '无宽'}
+                        {row.user.province} | {row.user.hasBroadband ? `${row.user.broadbandSpeed}M宽` : '无宽'}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <div className="font-medium text-brand-600">{row.recommendedPlan.name}</div>
                       <div className="text-xs text-slate-500">
-                        {row.recommendedPlan.price}元 | {row.recommendedPlan.hasBroadband ? `${row.recommendedPlan.broadbandSpeed}M` : '无宽'}
+                        {row.recommendedPlan.hasBroadband ? `${row.recommendedPlan.broadbandSpeed}M宽带` : '无宽带'}
                       </div>
                       {row.selectionMode === 'manual' && (
-                        <div className="text-xs text-sky-600 mt-1">已人工校正</div>
+                        <span className="text-xs text-sky-600">已人工校正</span>
                       )}
                     </td>
-                    <td className="px-6 py-3">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${REVIEW_STATUS_META[row.reviewStatus].bgColor} ${REVIEW_STATUS_META[row.reviewStatus].textColor}`}>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="text-slate-500">{row.user.currentPrice}元</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                        <span className={saving >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                          {row.recommendedPlan.price}元
+                        </span>
+                      </div>
+                      {saving !== 0 && (
+                        <div className={`text-xs mt-0.5 ${saving > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {saving > 0 ? `省${saving}元` : `增${Math.abs(saving)}元`}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${REVIEW_STATUS_META[row.reviewStatus].bgColor} ${REVIEW_STATUS_META[row.reviewStatus].textColor}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${REVIEW_STATUS_META[row.reviewStatus].dotColor}`} />
                         {REVIEW_STATUS_META[row.reviewStatus].label}
                       </span>
                       {row.reviewNote && (
-                        <div className="text-xs text-slate-500 mt-1 max-w-[180px] truncate" title={row.reviewNote}>
+                        <div className="text-xs text-slate-500 mt-1 max-w-[140px] truncate" title={row.reviewNote}>
                           {row.reviewNote}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs leading-relaxed">
+                    <td className="px-4 py-3 text-xs leading-relaxed max-w-[200px]">
                       {row.riskLevel === 'high' && (
                         <span className="inline-block bg-red-100 text-red-700 px-1.5 py-0.5 rounded mr-1 font-medium">
                           风险
@@ -323,78 +256,80 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
                       )}
                       {row.reason}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <button
                         onClick={() => onViewDetail(row)}
-                        className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-800 font-medium text-xs border border-brand-200 px-3 py-1.5 rounded-lg hover:bg-brand-50 transition-colors group/btn"
+                        className="inline-flex items-center gap-1.5 text-brand-600 hover:text-brand-800 font-medium text-xs border border-brand-200 px-3 py-1.5 rounded-lg hover:bg-brand-50 transition-colors group/btn whitespace-nowrap"
                       >
                         查看
                         <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover/btn:translate-x-0.5" />
                       </button>
                     </td>
                   </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-          {/* Mobile Cards */}
-          <div className="md:hidden overflow-auto custom-scroll flex-1 max-h-[500px] p-4 space-y-3">
-            {filteredResults.map((row, idx) => (
+        {/* Mobile Cards */}
+        <div className="md:hidden p-4 space-y-3">
+          {filteredResults.map((row, idx) => {
+            const saving = row.user.currentPrice - row.recommendedPlan.price;
+            return (
               <motion.div
                 key={idx}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: idx * 0.05 }}
-                className="border border-slate-200 rounded-xl p-4 hover:border-brand-200 transition-colors"
+                transition={{ duration: 0.3, delay: idx * 0.03 }}
+                className="border border-slate-200 rounded-xl overflow-hidden"
               >
-                <div className="flex items-start justify-between mb-3">
+                <div className="px-4 py-3 bg-slate-50 flex items-center justify-between">
                   <div>
-                    <div className="font-medium text-slate-900">
+                    <div className="font-medium text-slate-900 text-sm">
                       {row.user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      {row.user.province} | 现: {row.user.currentPrice}元
-                    </div>
+                    <div className="text-xs text-slate-500">{row.user.province}</div>
                   </div>
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${REVIEW_STATUS_META[row.reviewStatus].bgColor} ${REVIEW_STATUS_META[row.reviewStatus].textColor}`}>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${REVIEW_STATUS_META[row.reviewStatus].bgColor} ${REVIEW_STATUS_META[row.reviewStatus].textColor}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${REVIEW_STATUS_META[row.reviewStatus].dotColor}`} />
                     {REVIEW_STATUS_META[row.reviewStatus].label}
                   </span>
                 </div>
-
-                <div className="bg-brand-50 rounded-lg p-3 mb-3">
-                  <div className="text-xs text-slate-500 mb-1">推荐方案</div>
-                  <div className="font-medium text-brand-700">{row.recommendedPlan.name}</div>
-                  <div className="text-xs text-slate-600 mt-1">
-                    {row.recommendedPlan.price}元/月 | {row.recommendedPlan.hasBroadband ? `${row.recommendedPlan.broadbandSpeed}M宽带` : '无宽带'}
+                <div className="px-4 py-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">推荐方案</span>
+                    <span className="font-medium text-brand-600">{row.recommendedPlan.name}</span>
                   </div>
-                  {row.selectionMode === 'manual' && (
-                    <div className="text-xs text-sky-600 mt-1">已人工校正</div>
-                  )}
-                </div>
-
-                <div className="text-xs text-slate-600 mb-3">
-                  {row.riskLevel === 'high' && (
-                    <span className="inline-block bg-red-100 text-red-700 px-1.5 py-0.5 rounded mr-1 font-medium">
-                      风险
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">价格</span>
+                    <span className="flex items-center gap-1">
+                      <span className="text-slate-400">{row.user.currentPrice}元</span>
+                      <ArrowRight className="w-3 h-3 text-slate-400" />
+                      <span className={saving >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                        {row.recommendedPlan.price}元
+                      </span>
                     </span>
+                  </div>
+                  {row.riskLevel === 'high' && (
+                    <div className="flex items-center gap-1 text-xs">
+                      <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">风险</span>
+                    </div>
                   )}
-                  {row.reason}
+                  <div className="text-xs text-slate-600 line-clamp-2">{row.reason}</div>
                 </div>
-
                 <button
                   onClick={() => onViewDetail(row)}
-                  className="w-full flex items-center justify-center gap-1.5 text-brand-600 hover:text-brand-800 font-medium text-sm border border-brand-200 px-3 py-2 rounded-lg hover:bg-brand-50 transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 text-brand-600 hover:text-brand-800 font-medium text-sm border-t border-slate-200 px-3 py-2.5 hover:bg-brand-50 transition-colors"
                 >
                   查看详情
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      </div>
+            );
+          })}
+        </div>
+      </motion.div>
     </div>
   );
 };

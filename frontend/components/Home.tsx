@@ -1,64 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { motion, useInView } from 'framer-motion';
-import { BarChart3, Brain, Sparkles, ArrowRight } from 'lucide-react';
+import React from 'react';
+import { motion } from 'framer-motion';
+import { BarChart3, Brain, Sparkles, ArrowRight, Cpu, Shield, Zap, CheckCircle } from 'lucide-react';
 import Typewriter from './Typewriter';
 
 interface HomeProps {
   onStart: () => void;
-}
-
-/* ── Animated Counter ───────────────────────────────────────────── */
-
-function AnimatedCounter({ target, suffix = '' }: { target: number; suffix?: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    if (!inView) return;
-    let start = 0;
-    const duration = 1600;
-    const step = (ts: number) => {
-      if (!start) start = ts;
-      const progress = Math.min((ts - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-      setCount(Math.round(eased * target));
-      if (progress < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [inView, target]);
-
-  return (
-    <span ref={ref} className="tabular-nums">
-      {count.toLocaleString()}{suffix}
-    </span>
-  );
-}
-
-/* ── Stat Card ──────────────────────────────────────────────────── */
-
-interface StatProps {
-  value: number;
-  suffix: string;
-  label: string;
-  delay: number;
-}
-
-function StatCard({ value, suffix, label, delay }: StatProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 32 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.5, delay }}
-      className="bg-white rounded-2xl shadow-md p-8 text-center"
-    >
-      <div className="text-4xl md:text-5xl font-extrabold text-brand-600 mb-2">
-        <AnimatedCounter target={value} suffix={suffix} />
-      </div>
-      <p className="text-slate-500 text-sm font-medium">{label}</p>
-    </motion.div>
-  );
 }
 
 /* ── Feature Card ───────────────────────────────────────────────── */
@@ -168,12 +114,46 @@ const Home: React.FC<HomeProps> = ({ onStart }) => {
         </div>
       </section>
 
-      {/* ── Stats ────────────────────────────────────────────── */}
+      {/* ── Product Highlights ─────────────────────────────────── */}
       <section className="bg-slate-50 py-20 px-6">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-          <StatCard value={10000} suffix="+" label="已服务用户" delay={0} />
-          <StatCard value={95} suffix="%" label="推荐准确率" delay={0.1} />
-          <StatCard value={300} suffix="%" label="效率提升" delay={0.2} />
+        <div className="max-w-5xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-14"
+          >
+            <h2 className="text-3xl font-extrabold text-slate-800">产品亮点</h2>
+            <p className="mt-3 text-slate-500">四大核心优势，保障推荐质量与数据安全</p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[
+              { icon: <Cpu className="w-6 h-6" />, title: '规则引擎驱动', desc: '基于多维用户画像与业务规则，精准匹配最优套餐方案', delay: 0 },
+              { icon: <Shield className="w-6 h-6" />, title: '数据安全保障', desc: '所有数据本地化处理，不出内网，确保信息安全', delay: 0.1 },
+              { icon: <Zap className="w-6 h-6" />, title: '批量高效处理', desc: '支持Excel批量导入，一键完成千人级套餐推荐分析', delay: 0.2 },
+              { icon: <CheckCircle className="w-6 h-6" />, title: '人机协同审核', desc: 'AI推荐 + 人工校正双重机制，确保推荐质量', delay: 0.3 },
+            ].map((item) => (
+              <motion.div
+                key={item.title}
+                initial={{ opacity: 0, y: 32 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.5, delay: item.delay }}
+                whileHover={{ y: -4 }}
+                className="group bg-white rounded-xl shadow-sm p-6 flex items-start gap-4 transition-shadow hover:shadow-md cursor-default"
+              >
+                <div className="w-12 h-12 rounded-xl bg-brand-50 text-brand-500 flex items-center justify-center shrink-0 transition-colors group-hover:bg-brand-500 group-hover:text-white">
+                  {item.icon}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800 mb-1">{item.title}</h3>
+                  <p className="text-sm text-slate-500 leading-relaxed">{item.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
