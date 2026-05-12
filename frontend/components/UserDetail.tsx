@@ -252,6 +252,7 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
       >
         <button
           onClick={onBack}
+          aria-label="返回看板"
           className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 transition-colors text-sm font-medium"
         >
           <ArrowLeft size={18} />
@@ -592,6 +593,7 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
                     <button
                       type="button"
                       onClick={handleCopyScript}
+                      aria-label={copied ? '已复制' : '复制话术'}
                       className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition shadow-sm"
                     >
                       {copied ? (

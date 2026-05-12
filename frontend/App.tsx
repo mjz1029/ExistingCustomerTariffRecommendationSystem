@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { TariffPlan, RecommendationResult, PageView, AIProviderConfig } from './types';
 import { DEFAULT_PLANS } from './constants';
-import PlanTable from './components/PlanTable';
-import Dashboard from './components/Dashboard';
-import UserDetail from './components/UserDetail';
-import Home from './components/Home';
-import AISettings from './components/AISettings';
-import DataImport from './components/DataImport';
 import { plansApi, aiApi } from './services/api';
 import { ToastProvider } from './components/ui/Toast';
 import { MobileNav } from './components/ui/MobileNav';
 import { PageTransition } from './components/ui/PageTransition';
+import { StatsSkeleton } from './components/ui/Skeleton';
+
+const Home = lazy(() => import('./components/Home'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const UserDetail = lazy(() => import('./components/UserDetail'));
+const PlanTable = lazy(() => import('./components/PlanTable'));
+const AISettings = lazy(() => import('./components/AISettings'));
+const DataImport = lazy(() => import('./components/DataImport'));
 
 const DEFAULT_AI_CONFIG: AIProviderConfig = {
   providerName: 'OpenAI',
@@ -132,7 +134,7 @@ const App: React.FC = () => {
                 />
                 <h1 className="text-xl font-bold text-slate-800 tracking-tight">存量用户套餐推荐系统</h1>
               </div>
-              <nav className="hidden md:flex space-x-1">
+              <nav className="hidden md:flex space-x-1" role="navigation" aria-label="主导航">
                 {NAV_ITEMS.map(item => (
                   <button
                     key={item.value}
@@ -156,54 +158,66 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col" role="main">
           {activePage === 'home' && (
             <PageTransition>
-              <Home onStart={() => setActivePage('import')} />
+              <Suspense fallback={<StatsSkeleton />}>
+                <Home onStart={() => setActivePage('import')} />
+              </Suspense>
             </PageTransition>
           )}
 
           {activePage === 'dashboard' && (
             <PageTransition>
-              <Dashboard results={results} onViewDetail={handleViewDetail} />
+              <Suspense fallback={<StatsSkeleton />}>
+                <Dashboard results={results} onViewDetail={handleViewDetail} />
+              </Suspense>
             </PageTransition>
           )}
 
           {activePage === 'user-detail' && selectedResult && (
             <PageTransition>
-              <UserDetail
-                result={selectedResult}
-                plans={plans}
-                aiConfig={aiConfig}
-                onOpenAISettings={() => setActivePage('ai-settings')}
-                onBack={handleBackToDashboard}
-                onSaveResult={handleSaveResult}
-              />
+              <Suspense fallback={<StatsSkeleton />}>
+                <UserDetail
+                  result={selectedResult}
+                  plans={plans}
+                  aiConfig={aiConfig}
+                  onOpenAISettings={() => setActivePage('ai-settings')}
+                  onBack={handleBackToDashboard}
+                  onSaveResult={handleSaveResult}
+                />
+              </Suspense>
             </PageTransition>
           )}
 
           {activePage === 'ai-settings' && (
             <PageTransition>
-              <AISettings config={aiConfig} onSave={handleSaveAIConfig} />
+              <Suspense fallback={<StatsSkeleton />}>
+                <AISettings config={aiConfig} onSave={handleSaveAIConfig} />
+              </Suspense>
             </PageTransition>
           )}
 
           {activePage === 'plans' && (
             <PageTransition>
-              <PlanTable
-                plans={plans}
-                onAdd={handleAddPlan}
-                onEdit={handleEditPlan}
-                onDelete={handleDeletePlan}
-                onToggle={handleTogglePlan}
-                onImport={handleImportPlans}
-              />
+              <Suspense fallback={<StatsSkeleton />}>
+                <PlanTable
+                  plans={plans}
+                  onAdd={handleAddPlan}
+                  onEdit={handleEditPlan}
+                  onDelete={handleDeletePlan}
+                  onToggle={handleTogglePlan}
+                  onImport={handleImportPlans}
+                />
+              </Suspense>
             </PageTransition>
           )}
 
           {activePage === 'import' && (
             <PageTransition>
-              <DataImport plans={plans} onImportComplete={handleImportComplete} />
+              <Suspense fallback={<StatsSkeleton />}>
+                <DataImport plans={plans} onImportComplete={handleImportComplete} />
+              </Suspense>
             </PageTransition>
           )}
         </main>

@@ -146,6 +146,7 @@ const AISettings: React.FC<AISettingsProps> = ({ config, onSave }) => {
             <button
               type="button"
               onClick={() => setField('enabled', !draft.enabled)}
+              aria-label={draft.enabled ? '禁用 AI 话术生成' : '启用 AI 话术生成'}
               className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 flex-shrink-0 ${
                 draft.enabled ? 'bg-green-500' : 'bg-slate-300'
               }`}
@@ -284,6 +285,7 @@ const AISettings: React.FC<AISettingsProps> = ({ config, onSave }) => {
               <button
                 type="button"
                 onClick={() => setShowApiKey(!showApiKey)}
+                aria-label={showApiKey ? '隐藏 API Key' : '显示 API Key'}
                 className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
               >
                 {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

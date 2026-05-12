@@ -312,6 +312,7 @@ const DataImport: React.FC<DataImportProps> = ({ plans: _plans, onImportComplete
             className="hidden"
             onChange={handleFileUpload}
             disabled={isProcessing}
+            aria-label="上传 Excel 文件"
           />
         </div>
       </motion.div>

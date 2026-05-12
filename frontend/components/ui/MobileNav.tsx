@@ -57,6 +57,8 @@ export function MobileNav({ items, currentValue, onSelect }: MobileNavProps) {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              role="navigation"
+              aria-label="移动端导航"
               className="fixed top-0 left-0 z-50 h-full w-64 bg-white shadow-xl md:hidden"
             >
               <div className="flex items-center justify-between p-4 border-b border-slate-200">
