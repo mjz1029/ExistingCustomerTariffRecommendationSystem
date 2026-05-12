@@ -39,7 +39,7 @@ function FeatureCard({ icon, title, description, delay }: FeatureProps) {
 
 const Home: React.FC<HomeProps> = ({ onStart }) => {
   return (
-    <div className="flex flex-col -mx-4 sm:-mx-6 lg:-mx-8 -mt-8">
+    <div className="flex flex-col">
 
       {/* ── Full-page blue gradient background ────────────────── */}
       <div className="relative bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900">
