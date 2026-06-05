@@ -508,6 +508,39 @@ score = -(
 
 ---
 
+## 打包为独立应用
+
+系统支持通过 PyInstaller 打包为单个可执行文件，无需安装 Python 和 Node.js 环境，双击即用。
+
+### 本地打包（macOS）
+
+```bash
+# 确保已安装 Node.js 和 Python 3.10+
+chmod +x build.sh
+./build.sh
+# 产物: backend/dist/套餐推荐系统
+```
+
+### 跨平台自动构建（GitHub Actions）
+
+推送到 GitHub 后，打 tag 自动触发三平台构建：
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions 会自动在 Windows / macOS / Linux 上各构建一次，产物在 Release 页面下载。
+
+### 打包后运行
+
+1. 双击可执行文件
+2. 浏览器自动打开 `http://localhost:8000`
+3. 数据库文件（`tariff.db`）自动创建在可执行文件旁边
+4. 按 `Ctrl+C` 停止服务
+
+---
+
 ## 许可证
 
 本项目采用 [MIT License](LICENSE) 开源许可证。
