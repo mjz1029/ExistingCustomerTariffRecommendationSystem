@@ -82,15 +82,32 @@ async def generate_script(body: GenerateScriptRequest, db: Session = Depends(get
         raise HTTPException(status_code=404, detail="推荐结果不存在")
 
     # Build result dict for AI service
+    plan_dict = r.recommended_plan.to_dict() if r.recommended_plan else {}
     result_dict = {
         "user": r.user.to_dict(),
-        "recommendedPlan": r.recommended_plan.to_dict() if r.recommended_plan else {},
+        "recommendedPlan": plan_dict,
         "reason": r.reason,
         "riskLevel": r.risk_level,
         "saveAmount": r.save_amount,
         "reviewNote": r.review_note,
         "selectionMode": r.selection_mode,
+        "monthlyTotal": r.predicted_bill or plan_dict.get("monthlyTotal", 0) or plan_dict.get("price", 0),
+        "bundledInfo": "",  # will be populated if needed
+        "requiredConditions": plan_dict.get("requiredConditions", ""),
     }
+
+    # Parse bundled products for the prompt
+    import json as _json
+    raw_bp = plan_dict.get("bundledProducts", "") or ""
+    if raw_bp:
+        try:
+            bp_list = _json.loads(raw_bp) if isinstance(raw_bp, str) else raw_bp
+            if isinstance(bp_list, list):
+                required_items = [b["name"] for b in bp_list if b.get("required")]
+                if required_items:
+                    result_dict["bundledInfo"] = "需同时办理：" + " + ".join(required_items)
+        except Exception:
+            pass
 
     config_dict = ai_config.to_dict_full()
 

@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, Download, CheckCircle, AlertCircle, FileSpreadsheet, ChevronDown, ChevronUp, ArrowRight, X, Loader2 } from 'lucide-react';
 import { TariffPlan, RecommendationResult } from '../types';
 import { REQUIRED_HEADERS } from '../constants';
-import { generateTemplate, parseExcelFile } from '../utils/excel';
+import { generateTemplate } from '../utils/excel';
 import { usersApi, recommendationsApi } from '../services/api';
 import { useToast } from './ui/Toast';
+import { useAnimatedCounter } from '../hooks/useAnimatedCounter';
 
 interface DataImportProps {
   plans: TariffPlan[];
@@ -26,33 +27,6 @@ const STEP_LABELS: { key: ImportStep; label: string }[] = [
   { key: 'importing', label: '导入数据' },
   { key: 'generating', label: '生成推荐' },
 ];
-
-function useAnimatedCounter(target: number, duration: number = 1200) {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    if (target === 0) {
-      setCount(0);
-      return;
-    }
-    let startTime: number | null = null;
-    let animationFrame: number;
-    const animate = (currentTime: number) => {
-      if (!startTime) startTime = currentTime;
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCount(Math.floor(eased * target));
-      if (progress < 1) {
-        animationFrame = requestAnimationFrame(animate);
-      }
-    };
-    animationFrame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationFrame);
-  }, [target, duration]);
-
-  return count;
-}
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -115,19 +89,17 @@ const DataImport: React.FC<DataImportProps> = ({ plans: _plans, onImportComplete
     setProgress(0);
 
     try {
-      // Step 1: Parse file
+      // Step 1: Upload & parse on backend (openpyxl)
       setStep('parsing');
       await simulateProgress(30, 800);
-      const data = await parseExcelFile(file);
-      setProgress(33);
-
-      // Step 2: Import data
-      setStep('importing');
-      await simulateProgress(60, 600);
-      const { batch_id, count } = await usersApi.import(data);
+      const { batch_id, count, skipped, total_rows } = await usersApi.importExcel(file);
       setProgress(66);
 
-      // Step 3: Generate recommendations
+      if (count === 0) {
+        throw new Error(`共${total_rows}行数据，但0条有效记录被导入（跳过${skipped}行）。请检查表格是否有"联系电话"列`);
+      }
+
+      // Step 2: Generate recommendations
       setStep('generating');
       await simulateProgress(90, 800);
       await recommendationsApi.run(batch_id);
@@ -138,7 +110,6 @@ const DataImport: React.FC<DataImportProps> = ({ plans: _plans, onImportComplete
       setStep('done');
 
       // Build results summary
-      const skipped = Math.max(0, data.length - count);
       setResults({
         success: count,
         skipped,
@@ -156,7 +127,7 @@ const DataImport: React.FC<DataImportProps> = ({ plans: _plans, onImportComplete
         failed: 1,
         errors: [errorMsg],
       });
-      toast('文件解析或处理失败，请检查格式', 'error');
+      toast('文件上传或处理失败: ' + errorMsg, 'error');
       console.error(err);
     }
   }, [simulateProgress, onImportComplete, toast]);

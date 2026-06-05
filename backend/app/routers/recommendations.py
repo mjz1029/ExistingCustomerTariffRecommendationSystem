@@ -1,5 +1,6 @@
 import io
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -10,6 +11,8 @@ from ..models import Plan, UserRecord, RecommendationResult, ResultAlternative
 from ..schemas import RunRecommendationsRequest, UpdateResultRequest, RecomputeRequest
 from ..services.engine import run_recommendation_engine, build_recommendation_result_for_plan
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
 
@@ -19,10 +22,33 @@ def _result_to_dict(r: RecommendationResult, db: Session) -> dict:
     orig_plan = r.original_recommended_plan
     alts = [a.plan.to_dict() for a in r.alternatives]
 
+    plan_dict = rec_plan.to_dict() if rec_plan else {}
+
+    # 解析搭载产品 JSON 为可读文本
+    import json as _json
+    raw_bp = plan_dict.get("bundledProducts", "") or ""
+    bundled_info = ""
+    if raw_bp:
+        try:
+            bp_list = _json.loads(raw_bp) if isinstance(raw_bp, str) else raw_bp
+            if isinstance(bp_list, list):
+                items = []
+                for b in bp_list:
+                    name = b.get("name", "")
+                    price = b.get("price", 0)
+                    if price > 0:
+                        items.append(f"{name}({price}元)")
+                    else:
+                        items.append(name)
+                if items:
+                    bundled_info = "需同时办理：" + " + ".join(items)
+        except Exception:
+            bundled_info = str(raw_bp)
+
     return {
         "id": r.id,
         "user": user.to_dict(),
-        "recommendedPlan": rec_plan.to_dict() if rec_plan else None,
+        "recommendedPlan": plan_dict,
         "originalRecommendedPlan": orig_plan.to_dict() if orig_plan else None,
         "alternatives": alts,
         "reason": r.reason,
@@ -33,6 +59,9 @@ def _result_to_dict(r: RecommendationResult, db: Session) -> dict:
         "reviewStatus": r.review_status,
         "reviewNote": r.review_note,
         "selectionMode": r.selection_mode,
+        "monthlyTotal": plan_dict.get("monthlyTotal", 0) or plan_dict.get("price", 0),
+        "bundledInfo": bundled_info,
+        "requiredConditions": plan_dict.get("requiredConditions", ""),
     }
 
 
@@ -54,10 +83,12 @@ def run_engine(body: RunRecommendationsRequest, db: Session = Depends(get_db)):
         db.query(ResultAlternative).filter(ResultAlternative.result_id == old.id).delete()
         db.delete(old)
 
-    # Save new results
+    # Save new results (skip users with no candidates)
     count = 0
     for i, res in enumerate(results):
-        result_id = f"{body.batch_id}_{i}_{int(datetime.utcnow().timestamp() * 1000)}"
+        if res is None:
+            continue
+        result_id = f"{body.batch_id}_{users[i].id}_{int(datetime.now(timezone.utc).timestamp() * 1000)}"
         rec = RecommendationResult(
             id=result_id,
             user_id=users[i].id,
@@ -112,72 +143,18 @@ def list_results(
     return [_result_to_dict(r, db) for r in results]
 
 
-@router.get("/{result_id}")
-def get_result(result_id: str, db: Session = Depends(get_db)):
-    r = db.query(RecommendationResult).filter(RecommendationResult.id == result_id).first()
-    if not r:
-        raise HTTPException(status_code=404, detail="推荐结果不存在")
-    return _result_to_dict(r, db)
-
-
-@router.put("/{result_id}")
-def update_result(result_id: str, body: UpdateResultRequest, db: Session = Depends(get_db)):
-    r = db.query(RecommendationResult).filter(RecommendationResult.id == result_id).first()
-    if not r:
-        raise HTTPException(status_code=404, detail="推荐结果不存在")
-
-    if body.reviewStatus is not None:
-        r.review_status = body.reviewStatus
-    if body.reviewNote is not None:
-        r.review_note = body.reviewNote
-    if body.script is not None:
-        r.script = body.script
-    if body.recommendedPlanId is not None:
-        r.recommended_plan_id = body.recommendedPlanId
-    if body.selectionMode is not None:
-        r.selection_mode = body.selectionMode
-
-    r.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(r)
-    return _result_to_dict(r, db)
-
-
-@router.post("/{result_id}/recompute")
-def recompute_result(result_id: str, body: RecomputeRequest, db: Session = Depends(get_db)):
-    r = db.query(RecommendationResult).filter(RecommendationResult.id == result_id).first()
-    if not r:
-        raise HTTPException(status_code=404, detail="推荐结果不存在")
-
-    user = r.user
-    plans = db.query(Plan).all()
-
-    new_result = build_recommendation_result_for_plan(user.to_dict(), body.plan_id, [p for p in plans])
-
-    r.recommended_plan_id = new_result["recommendedPlan"].id
-    r.reason = new_result["reason"]
-    r.script = new_result["script"]
-    r.predicted_bill = new_result["predictedBill"]
-    r.risk_level = new_result["riskLevel"]
-    r.save_amount = new_result["saveAmount"]
-    r.selection_mode = "manual"
-    r.updated_at = datetime.utcnow()
-
-    # Update alternatives
-    db.query(ResultAlternative).filter(ResultAlternative.result_id == result_id).delete()
-    for j, alt in enumerate(new_result["alternatives"]):
-        db.add(ResultAlternative(result_id=result_id, plan_id=alt.id, sort_order=j))
-
-    db.commit()
-    db.refresh(r)
-    return _result_to_dict(r, db)
-
+# ── /export/download 必须在 /{result_id} 之前注册，避免路由冲突 ──
 
 @router.get("/export/download")
-def export_results(db: Session = Depends(get_db)):
+def export_results(batch_id: str = Query(None), db: Session = Depends(get_db)):
     import openpyxl
 
-    results = db.query(RecommendationResult).all()
+    query = db.query(RecommendationResult)
+    if batch_id:
+        user_ids = [u.id for u in db.query(UserRecord.id).filter(UserRecord.batch_id == batch_id).all()]
+        query = query.filter(RecommendationResult.user_id.in_(user_ids))
+    results = query.all()
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "推荐结果"
@@ -231,9 +208,108 @@ def export_results(db: Session = Depends(get_db)):
     )
 
 
+@router.get("/{result_id}")
+def get_result(result_id: str, db: Session = Depends(get_db)):
+    r = db.query(RecommendationResult).filter(RecommendationResult.id == result_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="推荐结果不存在")
+    return _result_to_dict(r, db)
+
+
+@router.put("/{result_id}")
+def update_result(result_id: str, body: UpdateResultRequest, db: Session = Depends(get_db)):
+    r = db.query(RecommendationResult).filter(RecommendationResult.id == result_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="推荐结果不存在")
+
+    if body.reviewStatus is not None:
+        r.review_status = body.reviewStatus
+    if body.reviewNote is not None:
+        r.review_note = body.reviewNote
+    if body.script is not None:
+        r.script = body.script
+    if body.recommendedPlanId is not None:
+        r.recommended_plan_id = body.recommendedPlanId
+    if body.selectionMode is not None:
+        r.selection_mode = body.selectionMode
+
+    r.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(r)
+    return _result_to_dict(r, db)
+
+
+@router.post("/{result_id}/recompute")
+def recompute_result(result_id: str, body: RecomputeRequest, db: Session = Depends(get_db)):
+    r = db.query(RecommendationResult).filter(RecommendationResult.id == result_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="推荐结果不存在")
+
+    user = r.user
+    plans = db.query(Plan).all()
+
+    new_result = build_recommendation_result_for_plan(user.to_dict(), body.plan_id, [p for p in plans])
+
+    r.recommended_plan_id = new_result["recommendedPlan"].id
+    r.reason = new_result["reason"]
+    r.script = new_result["script"]
+    r.predicted_bill = new_result["predictedBill"]
+    r.risk_level = new_result["riskLevel"]
+    r.save_amount = new_result["saveAmount"]
+    r.selection_mode = "manual"
+    r.updated_at = datetime.now(timezone.utc)
+
+    # Update alternatives
+    db.query(ResultAlternative).filter(ResultAlternative.result_id == result_id).delete()
+    for j, alt in enumerate(new_result["alternatives"]):
+        db.add(ResultAlternative(result_id=result_id, plan_id=alt.id, sort_order=j))
+
+    db.commit()
+    db.refresh(r)
+    return _result_to_dict(r, db)
+
+
+@router.post("/{result_id}/rerun")
+def rerun_recommendation(result_id: str, db: Session = Depends(get_db)):
+    """Re-run the full recommendation engine for a single user (after updating user fields)."""
+    r = db.query(RecommendationResult).filter(RecommendationResult.id == result_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="推荐结果不存在")
+
+    user = r.user
+    plans = db.query(Plan).all()
+
+    # Re-run the full engine with updated user data
+    results = run_recommendation_engine([user.to_dict()], plans)
+    new_result = results[0] if results and results[0] is not None else None
+    if not new_result:
+        raise HTTPException(status_code=500, detail="推荐引擎运行失败")
+
+    # Update the existing result record
+    r.recommended_plan_id = new_result["recommendedPlan"].id
+    r.original_recommended_plan_id = new_result["originalRecommendedPlan"].id
+    r.reason = new_result["reason"]
+    r.script = new_result["script"]
+    r.predicted_bill = new_result["predictedBill"]
+    r.risk_level = new_result["riskLevel"]
+    r.save_amount = new_result["saveAmount"]
+    r.selection_mode = "auto"
+    r.updated_at = datetime.now(timezone.utc)
+
+    # Update alternatives
+    db.query(ResultAlternative).filter(ResultAlternative.result_id == result_id).delete()
+    for j, alt in enumerate(new_result["alternatives"]):
+        db.add(ResultAlternative(result_id=result_id, plan_id=alt.id, sort_order=j))
+
+    db.commit()
+    db.refresh(r)
+    return _result_to_dict(r, db)
+
+
 @router.delete("")
 def clear_results(db: Session = Depends(get_db)):
     db.query(ResultAlternative).delete()
     db.query(RecommendationResult).delete()
+    db.query(UserRecord).delete()
     db.commit()
     return {"ok": True}

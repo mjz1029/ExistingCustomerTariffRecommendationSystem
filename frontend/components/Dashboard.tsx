@@ -4,6 +4,8 @@ import { Users, AlertTriangle, ClipboardCheck, Search, ChevronDown, ChevronLeft,
 import { RecommendationResult, ReviewStatus } from '../types';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { recommendationsApi } from '../services/api';
+import { useAnimatedCounter } from '../hooks/useAnimatedCounter';
+import TagFilter, { filterByTags } from './TagFilter';
 
 interface DashboardProps {
   results: RecommendationResult[];
@@ -19,27 +21,6 @@ const REVIEW_STATUS_META: Record<ReviewStatus, { label: string; dotColor: string
   accepted: { label: '已接受', dotColor: 'bg-green-500', bgColor: 'bg-green-50', textColor: 'text-green-700' },
   rejected: { label: '已驳回', dotColor: 'bg-red-500', bgColor: 'bg-red-50', textColor: 'text-red-700' },
 };
-
-// Animated counter hook
-function useAnimatedCounter(target: number, duration: number = 1200) {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    if (target === 0) { setCount(0); return; }
-    let startTime: number | null = null;
-    let frame: number;
-    const animate = (now: number) => {
-      if (!startTime) startTime = now;
-      const progress = Math.min((now - startTime) / duration, 1);
-      setCount(Math.floor((1 - Math.pow(1 - progress, 3)) * target));
-      if (progress < 1) frame = requestAnimationFrame(animate);
-    };
-    frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
-  }, [target, duration]);
-
-  return count;
-}
 
 // Compact stats card
 const StatsCard: React.FC<{
@@ -179,6 +160,7 @@ const Pagination: React.FC<{
 const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
   const [filterProv, setFilterProv] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTags, setActiveTags] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -200,19 +182,19 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
   }, [results]);
 
   const filteredResults = useMemo(() => {
-    return results.filter(r => {
+    return filterByTags(results, activeTags).filter(r => {
       const matchesProv = filterProv === 'all' || r.user.province === filterProv;
       const matchesSearch =
         r.user.phone.includes(searchTerm) ||
         r.recommendedPlan.name.includes(searchTerm);
       return matchesProv && matchesSearch;
     });
-  }, [results, filterProv, searchTerm]);
+  }, [results, filterProv, searchTerm, activeTags]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterProv, searchTerm, pageSize]);
+  }, [filterProv, searchTerm, activeTags, pageSize]);
 
   // Paginated slice
   const totalPages = Math.max(1, Math.ceil(filteredResults.length / pageSize));
@@ -392,6 +374,16 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
           </div>
         </div>
 
+        {/* Tag Filter */}
+        <div className="px-4 pt-4 pb-2 border-b border-slate-100">
+          <TagFilter
+            activeTags={activeTags}
+            onChange={setActiveTags}
+            resultCount={filteredResults.length}
+            totalCount={results.length}
+          />
+        </div>
+
         {/* Desktop Table */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600">
@@ -407,7 +399,8 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedResults.map((row, idx) => {
-                const saving = row.user.currentPrice - row.recommendedPlan.price;
+                const recPrice = row.monthlyTotal ?? row.recommendedPlan.price;
+                const saving = row.user.currentPrice - recPrice;
                 return (
                   <tr
                     key={row.id ?? idx}
@@ -420,12 +413,39 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
                       <div className="text-xs text-slate-500">
                         {row.user.province} | {row.user.hasBroadband ? `${row.user.broadbandSpeed}M宽` : '无宽'}
                       </div>
+                      <div className="flex gap-1 mt-1 flex-wrap">
+                        {row.user.carrier && row.user.carrier !== '移动' && (
+                          <span className="inline-block bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                            {row.user.carrier}
+                          </span>
+                        )}
+                        {row.user.customerType && (
+                          <span className="inline-block bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                            {row.user.customerType}
+                          </span>
+                        )}
+                        {row.user.isOldPlan && (
+                          <span className="inline-block bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                            老旧套餐
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="font-medium text-brand-600">{row.recommendedPlan.name}</div>
                       <div className="text-xs text-slate-500">
                         {row.recommendedPlan.hasBroadband ? `${row.recommendedPlan.broadbandSpeed}M宽带` : '无宽带'}
                       </div>
+                      {row.monthlyTotal && row.monthlyTotal > row.recommendedPlan.price && (
+                        <div className="text-xs text-amber-600 font-medium mt-0.5">
+                          月总额 {row.monthlyTotal}元（含搭载）
+                        </div>
+                      )}
+                      {row.bundledInfo && (
+                        <div className="text-[10px] text-orange-600 mt-0.5 max-w-[200px] truncate" title={row.bundledInfo}>
+                          ⚠ {row.bundledInfo}
+                        </div>
+                      )}
                       {row.selectionMode === 'manual' && (
                         <span className="text-xs text-sky-600">已人工校正</span>
                       )}
@@ -435,7 +455,7 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
                         <span className="text-slate-500">{row.user.currentPrice}元</span>
                         <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
                         <span className={saving >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                          {row.recommendedPlan.price}元
+                          {recPrice}元
                         </span>
                       </div>
                       {saving !== 0 && (
@@ -482,7 +502,8 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
         {/* Mobile Cards */}
         <div className="md:hidden p-4 space-y-3">
           {paginatedResults.map((row, idx) => {
-            const saving = row.user.currentPrice - row.recommendedPlan.price;
+            const recPrice = row.monthlyTotal || row.recommendedPlan.price;
+            const saving = row.user.currentPrice - recPrice;
             return (
               <div
                 key={row.id ?? idx}
@@ -493,7 +514,15 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
                     <div className="font-medium text-slate-900 text-sm">
                       {row.user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}
                     </div>
-                    <div className="text-xs text-slate-500">{row.user.province}</div>
+                    <div className="text-xs text-slate-500 flex items-center gap-1">
+                      {row.user.province}
+                      {row.user.carrier && row.user.carrier !== '移动' && (
+                        <span className="bg-orange-100 text-orange-700 px-1 py-0.5 rounded text-[10px]">{row.user.carrier}</span>
+                      )}
+                      {row.user.customerType && (
+                        <span className="bg-purple-100 text-purple-700 px-1 py-0.5 rounded text-[10px]">{row.user.customerType}</span>
+                      )}
+                    </div>
                   </div>
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${REVIEW_STATUS_META[row.reviewStatus].bgColor} ${REVIEW_STATUS_META[row.reviewStatus].textColor}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${REVIEW_STATUS_META[row.reviewStatus].dotColor}`} />
@@ -511,7 +540,7 @@ const Dashboard: React.FC<DashboardProps> = ({ results, onViewDetail }) => {
                       <span className="text-slate-400">{row.user.currentPrice}元</span>
                       <ArrowRight className="w-3 h-3 text-slate-400" />
                       <span className={saving >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                        {row.recommendedPlan.price}元
+                        {recPrice}元
                       </span>
                     </span>
                   </div>

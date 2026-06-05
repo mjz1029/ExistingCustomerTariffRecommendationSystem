@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, Float, Boolean, Integer, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .database import Base
 
@@ -14,10 +14,17 @@ class Plan(Base):
     data = Column(Float, nullable=False)
     voice = Column(Float, nullable=False)
     has_broadband = Column(Boolean, nullable=False, default=False)
-    broadband_speed = Column(Float, nullable=False, default=0)
+    broadband_speed = Column(Float, nullable=False, default=0)   # 最终有效带宽 (提速后)
     is_fttr = Column(Boolean, nullable=False, default=False)
+    broadband_base_speed = Column(Float, nullable=False, default=0)  # 原始带宽 (提速前，0=无提速)
     extras = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    # 资费体系扩展字段
+    monthly_total = Column(Float, nullable=False, default=0)  # 月费总额(含搭载)
+    bundled_products = Column(Text, nullable=True)  # 搭载产品JSON
+    required_conditions = Column(Text, nullable=True)  # 办理条件说明
+    target_carrier = Column(String(20), default="all")  # all/mobile_only/competitor
+    plan_category = Column(String(50), default="personal")  # personal/broadband/fttr/competitive
 
     def to_dict(self):
         return {
@@ -29,8 +36,14 @@ class Plan(Base):
             "hasBroadband": self.has_broadband,
             "broadbandSpeed": self.broadband_speed,
             "isFTTR": self.is_fttr,
+            "broadbandBaseSpeed": self.broadband_base_speed,
             "extras": self.extras,
             "isActive": self.is_active,
+            "monthlyTotal": self.monthly_total,
+            "bundledProducts": self.bundled_products,
+            "requiredConditions": self.required_conditions,
+            "targetCarrier": self.target_carrier,
+            "planCategory": self.plan_category,
         }
 
 
@@ -38,43 +51,86 @@ class UserRecord(Base):
     __tablename__ = "user_records"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    # 基本信息
     phone = Column(String(20), nullable=False)
-    province = Column(String(50), default="")
+    name = Column(String(100), default="")
+    province = Column(String(50), default="")       # 县市
+    grid = Column(String(100), default="")           # 网格
+    address = Column(String(300), default="")        # 地址
+    age = Column(Integer, default=0)                 # 年龄
+    ethnicity = Column(String(50), default="")       # 民族
+    carrier = Column(String(20), default="移动")        # 归属运营商
+    # 套餐信息
     current_plan_name = Column(String(200), default="")
     current_price = Column(Float, default=0)
-    arpu_3_month = Column(Float, default=0)
-    avg_data = Column(Float, default=0)
-    avg_voice = Column(Float, default=0)
+    # 异网用户填写的资费信息
+    competitor_plan_name = Column(String(200), default="")  # 异网套餐名称
+    competitor_plan_price = Column(Float, default=0)        # 异网套餐月费
+    # 消费信息
+    arpu_3_month = Column(Float, default=0)          # 折前ARPU
+    arpu_3_month_after = Column(Float, default=0)    # 折后ARPU
+    avg_data = Column(Float, default=0)              # DOU
+    avg_voice = Column(Float, default=0)             # MOU
+    overage_amount = Column(Float, default=0)        # 超套金额
+    extra_consumption = Column(Float, default=0)     # 家新+个新+新兴超消金
+    balance = Column(Float, default=0)               # 结余金额
+    # 计算字段（推荐引擎填充）
     saturation_data = Column(Float, default=0)
     saturation_voice = Column(Float, default=0)
-    overage_amount = Column(Float, default=0)
-    plan_type = Column(String(50), default="")
+    # 宽带信息
     has_broadband = Column(Boolean, default=False)
     broadband_speed = Column(Float, default=0)
     is_fttr = Column(Boolean, default=False)
-    remark = Column(Text, default="")
+    # 客户标签
+    customer_type = Column(String(50), default="")   # 拍照中高端/全球通/潜力客户
+    is_zero_contract = Column(Boolean, default=False)    # 是否0合约
+    is_old_plan = Column(Boolean, default=False)         # 是否老旧套餐
+    is_same_cert_new = Column(Boolean, default=False)    # 是否同证新增
+    is_dual_card = Column(Boolean, default=False)        # 是否异网双卡
+    is_my_num_other_broadband = Column(Boolean, default=False)  # 是否我号异宽
+    is_low_network_age = Column(Boolean, default=False)  # 是否拍照低网龄
+    special_case = Column(String(200), default="")       # 一事一案名称
+    # 批次
     batch_id = Column(String(50), index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     results = relationship("RecommendationResult", back_populates="user")
 
     def to_dict(self):
         return {
+            "id": self.id,
             "phone": self.phone,
+            "name": self.name,
             "province": self.province,
+            "grid": self.grid,
+            "address": self.address,
+            "age": self.age,
+            "ethnicity": self.ethnicity,
+            "carrier": self.carrier,
             "currentPlanName": self.current_plan_name,
             "currentPrice": self.current_price,
+            "competitorPlanName": self.competitor_plan_name,
+            "competitorPlanPrice": self.competitor_plan_price,
             "arpu3Month": self.arpu_3_month,
+            "arpu3MonthAfter": self.arpu_3_month_after,
             "avgData": self.avg_data,
             "avgVoice": self.avg_voice,
             "saturationData": self.saturation_data,
             "saturationVoice": self.saturation_voice,
             "overageAmount": self.overage_amount,
-            "planType": self.plan_type,
+            "extraConsumption": self.extra_consumption,
+            "balance": self.balance,
             "hasBroadband": self.has_broadband,
             "broadbandSpeed": self.broadband_speed,
             "isFTTR": self.is_fttr,
-            "remark": self.remark,
+            "customerType": self.customer_type,
+            "isZeroContract": self.is_zero_contract,
+            "isOldPlan": self.is_old_plan,
+            "isSameCertNew": self.is_same_cert_new,
+            "isDualCard": self.is_dual_card,
+            "isMyNumOtherBroadband": self.is_my_num_other_broadband,
+            "isLowNetworkAge": self.is_low_network_age,
+            "specialCase": self.special_case,
         }
 
 
@@ -93,8 +149,8 @@ class RecommendationResult(Base):
     review_status = Column(String(20), default="pending")
     review_note = Column(Text, default="")
     selection_mode = Column(String(10), default="auto")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     user = relationship("UserRecord", back_populates="results")
     recommended_plan = relationship("Plan", foreign_keys=[recommended_plan_id])

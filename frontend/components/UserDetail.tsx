@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import type { AIProviderConfig, RecommendationResult, ReviewStatus, TariffPlan } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { recommendationsApi, aiApi } from '../services/api';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { recommendationsApi, aiApi, usersApi } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -112,12 +112,28 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
   const [isRecomputing, setIsRecomputing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [displayedScript, setDisplayedScript] = useState('');
+  // 异网资费填写
+  const [compName, setCompName] = useState('');
+  const [compPrice, setCompPrice] = useState('');
+  const [compData, setCompData] = useState('');
+  const [compVoice, setCompVoice] = useState('');
+  const [compHasBB, setCompHasBB] = useState(false);
+  const [compBBSpeed, setCompBBSpeed] = useState('');
+  const [compFTTR, setCompFTTR] = useState(false);
+  const [isSavingComp, setIsSavingComp] = useState(false);
 
   useEffect(() => {
     setActiveResult(result);
     setSaveMessage('');
     setScriptError('');
     setDisplayedScript(result.script || '');
+    setCompName(result.user.competitorPlanName || '');
+    setCompPrice(result.user.competitorPlanPrice ? String(result.user.competitorPlanPrice) : '');
+    setCompData(result.user.avgData ? String(result.user.avgData) : '');
+    setCompVoice(result.user.avgVoice ? String(result.user.avgVoice) : '');
+    setCompHasBB(!!result.user.hasBroadband);
+    setCompBBSpeed(result.user.broadbandSpeed ? String(result.user.broadbandSpeed) : '');
+    setCompFTTR(!!result.user.isFTTR);
   }, [result]);
 
   const { user, recommendedPlan, reason, script, originalRecommendedPlan } = activeResult;
@@ -162,6 +178,7 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
   }, []);
 
   const handleRestoreSystemRecommendation = useCallback(async () => {
+    if (!originalRecommendedPlan) return;
     setIsRecomputing(true);
     try {
       const recomputed = await recommendationsApi.recompute(result.id!, originalRecommendedPlan.id);
@@ -172,7 +189,7 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
     } finally {
       setIsRecomputing(false);
     }
-  }, [result.id, originalRecommendedPlan.id]);
+  }, [result.id, originalRecommendedPlan]);
 
   const handleGenerateScript = useCallback(async () => {
     setIsGeneratingScript(true);
@@ -216,6 +233,33 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
     setTimeout(() => setCopied(false), 2000);
   }, [displayedScript]);
 
+  const handleSaveCompetitorPlan = useCallback(async () => {
+    if (!result.id) return;
+    setIsSavingComp(true);
+    try {
+      // 更新用户信息（竞品资费 + 使用情况）
+      await usersApi.updateUser(result.user.id as any, {
+        competitorPlanName: compName,
+        competitorPlanPrice: Number(compPrice) || 0,
+        avgData: Number(compData) || 0,
+        avgVoice: Number(compVoice) || 0,
+        hasBroadband: compHasBB,
+        broadbandSpeed: Number(compBBSpeed) || 0,
+        isFTTR: compFTTR,
+      });
+      // 重新跑推荐引擎（不是手动选套餐，而是完整重跑）
+      const recomputed = await recommendationsApi.rerun(result.id);
+      setActiveResult(recomputed);
+      setSaveMessage('✅ 用户信息已更新，推荐已重新生成');
+      setTimeout(() => setSaveMessage(''), 4000);
+    } catch (err) {
+      console.error('保存失败:', err);
+      setSaveMessage('❌ 保存失败，请重试');
+    } finally {
+      setIsSavingComp(false);
+    }
+  }, [result.id, result.user.id, compName, compPrice, compData, compVoice, compHasBB, compBBSpeed, compFTTR]);
+
   const isDirty =
     activeResult.recommendedPlan.id !== result.recommendedPlan.id ||
     activeResult.reviewStatus !== result.reviewStatus ||
@@ -223,20 +267,35 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
     activeResult.script !== result.script;
 
   /* ─── Chart data ─── */
+  /* ─── Chart data: 百分比变化 ─── */
+  const pctChange = (cur: number, rec: number) => {
+    if (!cur || cur === 0) return rec > 0 ? 100 : 0;
+    return Math.round(((rec - cur) / cur) * 100);
+  };
   const chartData = [
-    { name: '资费(元)', 当前: user.currentPrice, 推荐: recommendedPlan.price },
-    { name: '流量(GB)', 当前: user.avgData, 推荐: recommendedPlan.data },
-    { name: '语音(分)', 当前: user.avgVoice, 推荐: recommendedPlan.voice },
+    { name: '资费', change: -pctChange(user.currentPrice, recommendedPlan.price), good: recommendedPlan.price <= user.currentPrice, curVal: `${user.currentPrice}元`, recVal: `${recommendedPlan.price}元` },
+    { name: '流量', change: pctChange(user.avgData, recommendedPlan.data), good: recommendedPlan.data >= user.avgData, curVal: `${user.avgData}GB`, recVal: `${recommendedPlan.data}GB` },
+    { name: '语音', change: pctChange(user.avgVoice, recommendedPlan.voice), good: recommendedPlan.voice >= user.avgVoice, curVal: `${user.avgVoice}分`, recVal: `${recommendedPlan.voice}分` },
   ];
 
   /* ─── Comparison rows ─── */
+  const fmtNum = (n: number) => Number.isInteger(n) ? String(n) : n.toFixed(2);
   const comparisonRows = [
-    { label: '月资费', current: user.currentPrice, recommended: recommendedPlan.price, unit: '元' },
-    { label: '近三月ARPU', current: user.arpu3Month, recommended: activeResult.predictedBill, unit: '元 (预计)' },
+    { label: '月资费(含搭载)', current: user.currentPrice, recommended: activeResult.monthlyTotal || recommendedPlan.price, unit: '元' },
+    ...(activeResult.monthlyTotal && activeResult.monthlyTotal > recommendedPlan.price
+      ? [{ label: '纯套餐资费', current: user.currentPrice, recommended: recommendedPlan.price, unit: '元' }]
+      : []),
+    { label: '近三月ARPU', current: user.arpu3Month, recommended: activeResult.monthlyTotal || recommendedPlan.price, unit: '元' },
     { label: '流量资源', current: `${user.avgData}G (用量)`, recommended: `${recommendedPlan.data}GB (含量)` },
     { label: '语音资源', current: `${user.avgVoice}分 (用量)`, recommended: `${recommendedPlan.voice}分钟 (含量)` },
-    { label: '宽带服务', current: user.hasBroadband ? `${user.broadbandSpeed}M` : '无', recommended: recommendedPlan.hasBroadband ? `${recommendedPlan.broadbandSpeed}M` : '无' },
+    { label: '宽带服务', current: user.hasBroadband ? `${user.broadbandSpeed}M` : '无', recommended: recommendedPlan.hasBroadband ? `${recommendedPlan.broadbandSpeed}M${recommendedPlan.broadbandBaseSpeed ? '(提速)' : ''}` : '无' },
     { label: 'FTTR (全光WiFi)', current: user.isFTTR ? '是' : '否', recommended: recommendedPlan.isFTTR ? '是' : '否' },
+    ...(activeResult.bundledInfo
+      ? [{ label: '搭载业务', current: '—', recommended: activeResult.bundledInfo, unit: '' }]
+      : []),
+    ...(activeResult.requiredConditions
+      ? [{ label: '办理条件', current: '—', recommended: activeResult.requiredConditions, unit: '' }]
+      : []),
   ];
 
   const riskMeta = RISK_META[activeResult.riskLevel] || RISK_META.low;
@@ -275,6 +334,21 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
           <MapPin size={14} />
           <span>{user.province}</span>
         </div>
+        {user.carrier && user.carrier !== '移动' && (
+          <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium bg-orange-50 text-orange-700 border-orange-200">
+            {user.carrier}
+          </span>
+        )}
+        {user.customerType && (
+          <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium bg-purple-50 text-purple-700 border-purple-200">
+            {user.customerType}
+          </span>
+        )}
+        {user.isOldPlan && (
+          <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium bg-red-50 text-red-600 border-red-200">
+            老旧套餐
+          </span>
+        )}
         <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${riskMeta.className}`}>
           <Shield size={12} className="mr-1" />
           {riskMeta.label}
@@ -288,6 +362,126 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
           </span>
         )}
       </motion.div>
+
+      {/* ─── 异网资费填写 ─── */}
+      {user.carrier && user.carrier !== '移动' && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.15 }}
+          className="bg-orange-50 border border-orange-200 rounded-xl p-4 md:p-5"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-orange-700 font-semibold text-sm">📋 填写{user.carrier}用户资费信息</span>
+            <span className="text-xs text-orange-500">（填写后系统将基于竞品资费重新匹配推荐套餐）</span>
+          </div>
+
+          {/* 第一行: 竞品套餐 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">当前{user.carrier}套餐名称</label>
+              <input
+                type="text"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus:outline-none transition"
+                value={compName}
+                onChange={e => setCompName(e.target.value)}
+                placeholder={`如：${user.carrier}畅享99元套餐`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">月费（元）</label>
+              <input
+                type="number"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus:outline-none transition"
+                value={compPrice}
+                onChange={e => setCompPrice(e.target.value)}
+                placeholder="如：99"
+              />
+            </div>
+          </div>
+
+          {/* 第二行: 流量/语音/宽带 */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">月均流量 (GB)</label>
+              <input
+                type="number"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus:outline-none transition"
+                value={compData}
+                onChange={e => setCompData(e.target.value)}
+                placeholder="如：30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">月均通话 (分钟)</label>
+              <input
+                type="number"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus:outline-none transition"
+                value={compVoice}
+                onChange={e => setCompVoice(e.target.value)}
+                placeholder="如：200"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">宽带带宽 (Mbps)</label>
+              <input
+                type="number"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus:outline-none transition disabled:bg-slate-100 disabled:text-slate-400"
+                value={compBBSpeed}
+                onChange={e => setCompBBSpeed(e.target.value)}
+                placeholder="如：500"
+                disabled={!compHasBB}
+              />
+            </div>
+            <div className="flex flex-col gap-2 pt-5">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                  checked={compHasBB}
+                  onChange={e => { setCompHasBB(e.target.checked); if (!e.target.checked) { setCompBBSpeed(''); setCompFTTR(false); } }}
+                />
+                <span className="text-xs font-medium text-slate-700">有宽带</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                  checked={compFTTR}
+                  onChange={e => setCompFTTR(e.target.checked)}
+                  disabled={!compHasBB}
+                />
+                <span className="text-xs font-medium text-slate-700">FTTR全光</span>
+              </label>
+            </div>
+          </div>
+
+          {/* 保存按钮 */}
+          <div className="flex items-center gap-3 mt-2">
+            <button
+              type="button"
+              onClick={handleSaveCompetitorPlan}
+              disabled={isSavingComp || (!compName && !compPrice)}
+              className="flex items-center justify-center gap-1.5 px-5 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm font-medium disabled:opacity-50 transition shadow-sm"
+            >
+              {isSavingComp ? '保存中...' : '💾 保存并重新推荐'}
+            </button>
+            {saveMessage && (
+              <span className={`text-sm ${saveMessage.startsWith('✅') ? 'text-emerald-600' : 'text-red-500'}`}>
+                {saveMessage}
+              </span>
+            )}
+          </div>
+
+          {/* 已填写摘要 */}
+          {user.competitorPlanName && (
+            <div className="mt-3 pt-3 border-t border-orange-200 text-xs text-orange-700 space-y-0.5">
+              <div>已填写：{user.competitorPlanName} / {user.competitorPlanPrice}元/月</div>
+              <div>流量 {user.avgData || '?'}GB · 通话 {user.avgVoice || '?'}分钟 · {user.hasBroadband ? `宽带${user.broadbandSpeed || '?'}M${user.isFTTR ? '(FTTR)' : ''}` : '无宽带'}</div>
+            </div>
+          )}
+        </motion.div>
+      )}
 
       {/* ─── Main Grid ─── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
@@ -309,7 +503,7 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
               {/* Table header */}
               <div className="grid grid-cols-3 gap-2 md:gap-4 pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-200">
                 <div>维度</div>
-                <div>当前情况</div>
+                <div>当前{user.currentPlanName ? `(${user.currentPlanName})` : '情况'}</div>
                 <div>推荐方案 ({recommendedPlan.name})</div>
               </div>
 
@@ -328,15 +522,15 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
                       className={`grid grid-cols-3 gap-2 md:gap-4 py-3 border-b border-slate-100 last:border-0 ${i === 0 ? 'bg-brand-50/40' : ''}`}
                     >
                       <div className="text-slate-500 text-sm">{row.label}</div>
-                      <div className="font-medium text-slate-700 text-sm">{row.current} {row.unit}</div>
+                      <div className="font-medium text-slate-700 text-sm">{typeof row.current === 'number' ? fmtNum(row.current as number) : row.current} {row.unit}</div>
                       <div className="flex items-center gap-1">
                         <span className={`font-bold text-sm ${i === 0 ? 'text-brand-700' : 'text-slate-800'}`}>
-                          {row.recommended} {row.unit}
+                          {typeof row.recommended === 'number' ? fmtNum(row.recommended as number) : row.recommended} {row.unit}
                         </span>
                         {isNumericDiff && diff !== 0 && (
                           <span className={`inline-flex items-center text-xs font-medium ${isSaving ? 'text-green-600' : 'text-red-500'}`}>
                             {isSaving ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
-                            {Math.abs(diff)}
+                            {fmtNum(Math.abs(diff))}
                           </span>
                         )}
                       </div>
@@ -344,8 +538,44 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
                   );
                 })}
               </motion.div>
+              {/* 注释说明 */}
+              <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400 space-y-1">
+                <p>* 月资费(含搭载) = 主套餐 + 必办搭载业务的固定月费</p>
+                <p>* 近三月ARPU：当前列为用户近3个月实际月均消费，推荐列为推荐套餐的月费总额（含搭载业务）</p>
+              </div>
             </div>
           </CollapsibleSection>
+
+          {/* Bundled Requirements */}
+          {activeResult.bundledInfo && (
+            <CollapsibleSection
+              title="搭载要求（必办业务）"
+              icon={<span className="text-amber-500">⚠️</span>}
+              defaultOpen={true}
+              className="bg-white rounded-xl shadow-sm border border-amber-200 overflow-hidden"
+            >
+              <div className="px-4 md:px-6 pb-4 md:pb-6">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 md:p-4">
+                  <div className="text-sm text-amber-800 font-medium mb-2">
+                    办理此套餐需同时开通以下业务，否则会下发差错：
+                  </div>
+                  <div className="text-sm text-amber-700 leading-relaxed">
+                    {activeResult.bundledInfo}
+                  </div>
+                  {activeResult.monthlyTotal && activeResult.monthlyTotal > recommendedPlan.price && (
+                    <div className="mt-2 pt-2 border-t border-amber-200 text-sm font-semibold text-amber-900">
+                      月费总额：{activeResult.monthlyTotal}元（主套餐{recommendedPlan.price}元 + 搭载{activeResult.monthlyTotal - recommendedPlan.price}元）
+                    </div>
+                  )}
+                </div>
+                {activeResult.requiredConditions && (
+                  <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600">
+                    <span className="font-medium text-slate-700">办理条件：</span>{activeResult.requiredConditions}
+                  </div>
+                )}
+              </div>
+            </CollapsibleSection>
+          )}
 
           {/* Bar Chart */}
           <CollapsibleSection
@@ -362,20 +592,35 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
             >
               <div className="h-56 md:h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
+                  <BarChart data={chartData} layout="vertical" margin={{ top: 10, right: 60, left: 10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={v => `${v}%`} domain={['auto', 'auto']} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 13, fontWeight: 600 }} width={50} />
                     <Tooltip
                       contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13 }}
+                      formatter={(value: number, _name: string, props: any) => {
+                        const d = props.payload;
+                        return [`${value > 0 ? '+' : ''}${value}%  (${d.curVal} → ${d.recVal})`, '变化幅度'];
+                      }}
                     />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="当前" name="当前(价格/用量)" fill="#94a3b8" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="推荐" name="推荐套餐含量" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                    <Bar
+                      dataKey="change"
+                      name="变化幅度"
+                      radius={[0, 6, 6, 0]}
+                      barSize={28}
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.good ? '#10b981' : '#ef4444'} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <p className="text-xs text-center text-slate-400 mt-2">* 流量/语音对比为：用户实际使用量 vs 推荐套餐包含量</p>
+              <div className="flex items-center justify-center gap-4 mt-2 text-xs text-slate-400">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500"></span> 资源提升</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500"></span> 资源下降</span>
+                <span>* 资费为反向指标(降=好)，流量/语音为正向(升=好)</span>
+              </div>
             </motion.div>
           </CollapsibleSection>
         </div>
@@ -419,7 +664,7 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
                     {availablePlans.map(plan => (
                       <option key={plan.id} value={plan.id}>
                         {plan.name} | {plan.price}元 | {plan.data}G | {plan.voice}分
-                        {plan.hasBroadband ? ` | ${plan.broadbandSpeed}M宽带` : ''}
+                        {plan.hasBroadband ? ` | ${plan.broadbandSpeed}M${plan.broadbandBaseSpeed ? '(提速)' : ''}宽带` : ''}
                         {plan.isFTTR ? ' | FTTR' : ''}
                       </option>
                     ))}
@@ -657,7 +902,7 @@ const UserDetail: React.FC<UserDetailProps> = ({ result, plans, aiConfig, onOpen
                           <span>{plan.data}G</span>
                           <span>{plan.voice}分</span>
                           {plan.hasBroadband && (
-                            <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{plan.broadbandSpeed}M宽</span>
+                            <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{plan.broadbandSpeed}M{plan.broadbandBaseSpeed ? '(提速)' : ''}宽</span>
                           )}
                           {plan.isFTTR && (
                             <span className="bg-violet-50 text-violet-600 px-1.5 py-0.5 rounded">FTTR</span>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { TariffPlan, RecommendationResult, PageView, AIProviderConfig } from './types';
 import { DEFAULT_PLANS } from './constants';
-import { plansApi, aiApi } from './services/api';
+import { plansApi, aiApi, recommendationsApi } from './services/api';
 import { ToastProvider } from './components/ui/Toast';
 import { MobileNav } from './components/ui/MobileNav';
 import { PageTransition } from './components/ui/PageTransition';
@@ -43,12 +43,16 @@ const App: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const [plansData, aiData] = await Promise.all([
+        const [plansData, aiData, recsData] = await Promise.all([
           plansApi.list(),
           aiApi.getConfig(),
+          recommendationsApi.list(),
         ]);
         setPlans(plansData);
         setAIConfig(aiData);
+        if (recsData.length > 0) {
+          setResults(recsData);
+        }
       } catch (err) {
         console.error('加载数据失败:', err);
         setPlans(DEFAULT_PLANS);
@@ -60,31 +64,56 @@ const App: React.FC = () => {
   }, []);
 
   const handleAddPlan = async (newPlan: Omit<TariffPlan, 'id'>) => {
-    const created = await plansApi.create(newPlan);
-    setPlans(prev => [...prev, created]);
+    try {
+      const created = await plansApi.create(newPlan);
+      setPlans(prev => [...prev, created]);
+    } catch (err) {
+      console.error('新增套餐失败:', err);
+      alert('新增套餐失败，请重试');
+    }
   };
 
   const handleEditPlan = async (updatedPlan: TariffPlan) => {
-    const updated = await plansApi.update(updatedPlan.id, updatedPlan);
-    setPlans(prev => prev.map(p => p.id === updated.id ? updated : p));
+    try {
+      const updated = await plansApi.update(updatedPlan.id, updatedPlan);
+      setPlans(prev => prev.map(p => p.id === updated.id ? updated : p));
+    } catch (err) {
+      console.error('更新套餐失败:', err);
+      alert('更新套餐失败，请重试');
+    }
   };
 
   const handleDeletePlan = async (id: string) => {
-    await plansApi.delete(id);
-    setPlans(prev => prev.filter(p => p.id !== id));
+    try {
+      await plansApi.delete(id);
+      setPlans(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      console.error('删除套餐失败:', err);
+      alert('删除套餐失败，请重试');
+    }
   };
 
   const handleTogglePlan = async (id: string) => {
-    const updated = await plansApi.toggle(id);
-    setPlans(prev => prev.map(p => p.id === updated.id ? updated : p));
+    try {
+      const updated = await plansApi.toggle(id);
+      setPlans(prev => prev.map(p => p.id === updated.id ? updated : p));
+    } catch (err) {
+      console.error('切换套餐状态失败:', err);
+      alert('操作失败，请重试');
+    }
   };
 
   const handleImportPlans = async (importedPlans: TariffPlan[]) => {
-    await plansApi.import(importedPlans);
-    setPlans(importedPlans);
-    setResults([]);
-    setSelectedResult(null);
-    setActivePage('plans');
+    try {
+      await plansApi.import(importedPlans);
+      setPlans(importedPlans);
+      setResults([]);
+      setSelectedResult(null);
+      setActivePage('plans');
+    } catch (err) {
+      console.error('导入套餐失败:', err);
+      alert('导入套餐失败，请重试');
+    }
   };
 
   const handleImportComplete = (recs: RecommendationResult[]) => {
@@ -110,6 +139,14 @@ const App: React.FC = () => {
   const handleSaveAIConfig = async (nextConfig: AIProviderConfig) => {
     const saved = await aiApi.updateConfig(nextConfig);
     setAIConfig(saved);
+  };
+
+  const handleClearData = async () => {
+    if (!confirm('确定清除所有用户数据和推荐结果？此操作不可撤销。')) return;
+    await recommendationsApi.clear();
+    setResults([]);
+    setSelectedResult(null);
+    setActivePage('import');
   };
 
   if (isLoading) {
@@ -154,6 +191,13 @@ const App: React.FC = () => {
                 currentValue={activePage}
                 onSelect={(value) => setActivePage(value as PageView)}
               />
+              <button
+                onClick={handleClearData}
+                className="ml-2 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md border border-red-200 transition-colors"
+                title="清除所有用户数据和推荐结果"
+              >
+                清除数据
+              </button>
             </div>
           </div>
         </header>

@@ -1,15 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
 
 from .database import Base, engine, SessionLocal
 from .routers import plans, users, recommendations, ai
 from .seed import seed_plans
-
-# Set journal mode for exfat compatibility
-with engine.connect() as conn:
-    conn.execute(text("PRAGMA journal_mode=OFF"))
-    conn.commit()
 
 Base.metadata.create_all(bind=engine)
 
@@ -25,7 +19,7 @@ app = FastAPI(title="存量用户套餐推荐系统 API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -42,6 +42,27 @@ export const usersApi = {
       method: 'POST',
       body: JSON.stringify(users),
     }),
+  importExcel: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch(`${API_BASE}/users/import-excel`, { method: 'POST', body: fd })
+      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); }) as Promise<{ batch_id: string; count: number; skipped: number; total_rows: number }>;
+  },
+  updateUser: (userId: number, data: {
+    competitorPlanName?: string;
+    competitorPlanPrice?: number;
+    currentPlanName?: string;
+    currentPrice?: number;
+    avgData?: number;
+    avgVoice?: number;
+    hasBroadband?: boolean;
+    broadbandSpeed?: number;
+    isFTTR?: boolean;
+  }) =>
+    request<UserRecord>(`/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 };
 
 // Recommendations
@@ -80,6 +101,11 @@ export const recommendationsApi = {
     request<RecommendationResult>(`/recommendations/${id}/recompute`, {
       method: 'POST',
       body: JSON.stringify({ plan_id: planId }),
+    }),
+
+  rerun: (id: string) =>
+    request<RecommendationResult>(`/recommendations/${id}/rerun`, {
+      method: 'POST',
     }),
 
   exportUrl: () => `${API_BASE}/recommendations/export/download`,

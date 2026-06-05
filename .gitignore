@@ -1,17 +1,17 @@
-# macOS
+# ─── macOS ───
 .DS_Store
 ._*
 .AppleDouble
 .LSOverride
 
-# IDE
+# ─── IDE ───
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# Python
+# ─── Python ───
 __pycache__/
 *.py[cod]
 *$py.class
@@ -27,33 +27,43 @@ venv/
 env/
 .env
 
-# Database
+# ─── Database ───
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
 
-# Node
+# ─── Node ───
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Build
+# ─── Build ───
 dist/
 dist-ssr/
 *.local
 
-# Logs
+# ─── Logs ───
 logs/
 *.log
 
-# Claude
+# ─── Claude Code ───
 .claude/
+.hermes/
 
-# Thesis / drafts
-thesis/
+# ─── Backups ───
+*.bak
+*.bak2
+.backup-*/
+
+# ─── Thesis / personal documents ───
 report.md
 thisis.md
-*.bak
+thesis/
+*.docx
+algorithm-flowchart.html
+architecture-diagram.html
+generate-docx.js
+img/

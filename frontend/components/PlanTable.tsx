@@ -24,7 +24,9 @@ const PlanTable: React.FC<PlanTableProps> = ({ plans, onAdd, onEdit, onDelete, o
   const initialPlanState: Partial<TariffPlan> = {
     name: '', price: 0, data: 0, voice: 0,
     hasBroadband: false, broadbandSpeed: 0, isFTTR: false,
-    isActive: true, extras: ''
+    isActive: true, extras: '',
+    monthlyTotal: 0, bundledProducts: '[]', requiredConditions: '',
+    targetCarrier: 'all', planCategory: 'personal',
   };
 
   const [formData, setFormData] = useState<Partial<TariffPlan>>(initialPlanState);
@@ -240,6 +242,7 @@ const PlanTable: React.FC<PlanTableProps> = ({ plans, onAdd, onEdit, onDelete, o
               <th className="px-5 py-3.5 font-semibold">资费</th>
               <th className="px-5 py-3.5 font-semibold">流量/语音</th>
               <th className="px-5 py-3.5 font-semibold">宽带权益</th>
+              <th className="px-5 py-3.5 font-semibold">搭载业务</th>
               <th className="px-5 py-3.5 font-semibold">FTTR</th>
               <th className="px-5 py-3.5 font-semibold">状态</th>
               <th className="px-5 py-3.5 font-semibold text-right">操作</th>
@@ -266,10 +269,42 @@ const PlanTable: React.FC<PlanTableProps> = ({ plans, onAdd, onEdit, onDelete, o
                 <td className="px-5 py-4">
                   {plan.hasBroadband ? (
                     <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                      {plan.broadbandSpeed}M 宽带
+                      {plan.broadbandSpeed}M{plan.broadbandBaseSpeed ? '(提速)' : ''} 宽带
                     </span>
                   ) : <span className="text-slate-300">&ndash;</span>}
                   {plan.extras && <div className="text-xs text-slate-400 mt-1 truncate max-w-[150px]" title={plan.extras}>{plan.extras}</div>}
+                </td>
+                <td className="px-5 py-4">
+                  {plan.bundledProducts && plan.bundledProducts !== '[]' ? (() => {
+                    try {
+                      const items = JSON.parse(plan.bundledProducts);
+                      const total = items.reduce((s: number, b: any) => s + (b.price || 0), 0);
+                      return (
+                        <div>
+                          {items.map((b: any, idx: number) => (
+                            <div key={idx} className="text-[11px] text-slate-600 leading-tight">
+                              {b.name}{b.price > 0 ? ` (${b.price}元)` : ''}
+                            </div>
+                          ))}
+                          {total > 0 && (
+                            <div className="text-[11px] text-amber-600 font-medium mt-0.5">
+                              搭载 +{total}元/月
+                            </div>
+                          )}
+                          {plan.monthlyTotal && plan.monthlyTotal > plan.price && (
+                            <div className="text-xs text-slate-800 font-semibold mt-0.5">
+                              月总额 {plan.monthlyTotal}元
+                            </div>
+                          )}
+                        </div>
+                      );
+                    } catch { return <span className="text-slate-300">&ndash;</span>; }
+                  })() : <span className="text-slate-300">&ndash;</span>}
+                  {plan.requiredConditions && (
+                    <div className="text-[10px] text-slate-400 mt-0.5 max-w-[180px] truncate" title={plan.requiredConditions}>
+                      条件: {plan.requiredConditions}
+                    </div>
+                  )}
                 </td>
                 <td className="px-5 py-4">
                   {plan.isFTTR ? (
@@ -365,7 +400,7 @@ const PlanTable: React.FC<PlanTableProps> = ({ plans, onAdd, onEdit, onDelete, o
               <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600">{plan.data} GB</span>
               <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600">{plan.voice} 分钟</span>
               {plan.hasBroadband && (
-                <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">{plan.broadbandSpeed}M 宽带</span>
+                <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">{plan.broadbandSpeed}M{plan.broadbandBaseSpeed ? '(提速)' : ''} 宽带</span>
               )}
               {plan.isFTTR && (
                 <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 border border-purple-100">FTTR</span>
@@ -375,6 +410,28 @@ const PlanTable: React.FC<PlanTableProps> = ({ plans, onAdd, onEdit, onDelete, o
             {plan.extras && (
               <div className="text-xs text-slate-400 truncate">{plan.extras}</div>
             )}
+
+            {plan.bundledProducts && plan.bundledProducts !== '[]' && (() => {
+              try {
+                const items = JSON.parse(plan.bundledProducts);
+                const total = items.reduce((s: number, b: any) => s + (b.price || 0), 0);
+                return (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <div className="text-[11px] font-medium text-amber-700 mb-1">搭载业务：</div>
+                    {items.map((b: any, idx: number) => (
+                      <div key={idx} className="text-[11px] text-amber-600">
+                        {b.name}{b.price > 0 ? ` (+${b.price}元)` : ''}
+                      </div>
+                    ))}
+                    {plan.monthlyTotal && plan.monthlyTotal > plan.price && (
+                      <div className="text-xs text-amber-800 font-semibold mt-1">
+                        月总额 {plan.monthlyTotal}元
+                      </div>
+                    )}
+                  </div>
+                );
+              } catch { return null; }
+            })()}
 
             <div className="flex gap-2 pt-1">
               <motion.button
@@ -550,6 +607,163 @@ const PlanTable: React.FC<PlanTableProps> = ({ plans, onAdd, onEdit, onDelete, o
                       onChange={e => setFormData({ ...formData, extras: e.target.value })}
                       placeholder="可选"
                     />
+                  </div>
+                </div>
+
+                {/* 资费体系扩展字段 */}
+                <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-4">
+                  <h4 className="text-sm font-semibold text-amber-800">搭载业务与资费信息</h4>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">月费总额(含搭载)</label>
+                      <input
+                        type="number"
+                        className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-all"
+                        value={formData.monthlyTotal || 0}
+                        onChange={e => setFormData({ ...formData, monthlyTotal: Number(e.target.value) })}
+                        placeholder="主套餐+搭载费用总和"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">目标用户</label>
+                      <select
+                        className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-all"
+                        value={formData.targetCarrier || 'all'}
+                        onChange={e => setFormData({ ...formData, targetCarrier: e.target.value })}
+                      >
+                        <option value="all">全部用户</option>
+                        <option value="mobile_only">仅移动新入网</option>
+                        <option value="competitor">竞争应对(异网)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">套餐分类</label>
+                      <select
+                        className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-all"
+                        value={formData.planCategory || 'personal'}
+                        onChange={e => setFormData({ ...formData, planCategory: e.target.value })}
+                      >
+                        <option value="personal">个人(无宽带)</option>
+                        <option value="broadband">融合宽带</option>
+                        <option value="fttr">FTTR全光</option>
+                        <option value="competitive">竞争资费</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">办理条件说明</label>
+                      <input
+                        type="text"
+                        className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-all"
+                        value={formData.requiredConditions || ''}
+                        onChange={e => setFormData({ ...formData, requiredConditions: e.target.value })}
+                        placeholder="如：主套餐79元及以下办理"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 搭载业务列表编辑器 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm font-medium text-slate-700">搭载业务列表</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const items = JSON.parse(formData.bundledProducts || '[]');
+                          items.push({ name: '', code: '', price: 0, required: true, note: '' });
+                          setFormData({ ...formData, bundledProducts: JSON.stringify(items) });
+                        }}
+                        className="text-xs text-brand-600 hover:text-brand-800 font-medium"
+                      >
+                        + 添加搭载业务
+                      </button>
+                    </div>
+
+                    {(() => {
+                      let items: any[] = [];
+                      try { items = JSON.parse(formData.bundledProducts || '[]'); } catch { items = []; }
+
+                      if (items.length === 0) {
+                        return (
+                          <div className="text-xs text-slate-400 italic py-2">暂无搭载业务，点击上方按钮添加</div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-2">
+                          {items.map((item: any, idx: number) => (
+                            <div key={idx} className="flex items-start gap-2 bg-white rounded-lg border border-slate-200 p-2.5">
+                              <div className="flex-1 grid grid-cols-[1fr_80px_70px] gap-2">
+                                <input
+                                  type="text"
+                                  className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:border-brand-500 focus:outline-none"
+                                  value={item.name}
+                                  onChange={e => {
+                                    const newItems = [...items];
+                                    newItems[idx] = { ...newItems[idx], name: e.target.value };
+                                    setFormData({ ...formData, bundledProducts: JSON.stringify(newItems) });
+                                  }}
+                                  placeholder="业务名称"
+                                />
+                                <input
+                                  type="text"
+                                  className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:border-brand-500 focus:outline-none"
+                                  value={item.code}
+                                  onChange={e => {
+                                    const newItems = [...items];
+                                    newItems[idx] = { ...newItems[idx], code: e.target.value };
+                                    setFormData({ ...formData, bundledProducts: JSON.stringify(newItems) });
+                                  }}
+                                  placeholder="编码"
+                                />
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:border-brand-500 focus:outline-none"
+                                    value={item.price}
+                                    onChange={e => {
+                                      const newItems = [...items];
+                                      newItems[idx] = { ...newItems[idx], price: Number(e.target.value) };
+                                      setFormData({ ...formData, bundledProducts: JSON.stringify(newItems) });
+                                    }}
+                                    placeholder="价格"
+                                  />
+                                  <span className="text-[10px] text-slate-400">元</span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-center gap-1 pt-0.5">
+                                <label className="flex items-center gap-1 cursor-pointer" title="是否必选">
+                                  <input
+                                    type="checkbox"
+                                    className="rounded"
+                                    checked={item.required !== false}
+                                    onChange={e => {
+                                      const newItems = [...items];
+                                      newItems[idx] = { ...newItems[idx], required: e.target.checked };
+                                      setFormData({ ...formData, bundledProducts: JSON.stringify(newItems) });
+                                    }}
+                                  />
+                                  <span className="text-[10px] text-slate-500">必选</span>
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newItems = items.filter((_: any, i: number) => i !== idx);
+                                    setFormData({ ...formData, bundledProducts: JSON.stringify(newItems) });
+                                  }}
+                                  className="text-red-400 hover:text-red-600 text-[10px]"
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 

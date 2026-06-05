@@ -1,6 +1,9 @@
 import re
 import json
+import logging
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 PROTOCOL_PRESETS = {
@@ -59,6 +62,9 @@ def build_prompt(result: dict) -> str:
     reason = result.get("reason", "")
     risk_level = result.get("riskLevel", "low")
     save_amount = result.get("saveAmount", 0)
+    bundled_info = result.get("bundledInfo", "")
+    monthly_total = result.get("monthlyTotal", 0)
+    required_conditions = result.get("requiredConditions", "")
     review_note = result.get("reviewNote", "")
     selection_mode = result.get("selectionMode", "auto")
 
@@ -73,23 +79,31 @@ def build_prompt(result: dict) -> str:
         "6. 如果风险较高，要用更稳妥表达，避免强推。",
         "",
         f"用户手机号：{user.get('phone', '')}",
+        f"姓名：{user.get('name', '') or '未知'}",
         f"归属地：{user.get('province', '') or '未知'}",
+        f"客户类型：{user.get('customerType', '') or '未知'}",
         f"当前套餐：{user.get('currentPlanName', '')}",
         f"当前档位：{user.get('currentPrice', 0)}元",
-        f"近三个月ARPU：{user.get('arpu3Month', 0)}元",
+        f"近三个月ARPU（折前）：{user.get('arpu3Month', 0)}元",
+        f"近三个月ARPU（折后）：{user.get('arpu3MonthAfter', 0)}元",
         f"月均流量：{user.get('avgData', 0)}GB",
         f"月均通话：{user.get('avgVoice', 0)}分钟",
         f"是否有宽带：{'是' if user.get('hasBroadband') else '否'}",
-        f"当前宽带速率：{f'{user.get('broadbandSpeed', 0)}Mbps' if user.get('hasBroadband') else '无'}",
+        f"当前宽带速率：{str(user.get('broadbandSpeed', 0)) + 'Mbps' if user.get('hasBroadband') else '无'}",
         f"是否FTTR：{'是' if user.get('isFTTR') else '否'}",
-        f"备注：{user.get('remark', '') or '无'}",
+        f"是否老旧套餐：{'是' if user.get('isOldPlan') else '否'}",
+        f"是否0合约：{'是' if user.get('isZeroContract') else '否'}",
+        f"一事一案：{user.get('specialCase', '') or '无'}",
         f"系统/当前推荐套餐：{plan.get('name', '')}",
         f"推荐档位：{plan.get('price', 0)}元",
         f"推荐流量：{plan.get('data', 0)}GB",
         f"推荐语音：{plan.get('voice', 0)}分钟",
-        f"推荐宽带：{f'{plan.get('broadbandSpeed', 0)}Mbps' if plan.get('hasBroadband') else '无'}",
+        f"推荐宽带：{str(plan.get('broadbandSpeed', 0)) + 'Mbps' if plan.get('hasBroadband') else '无'}",
         f"推荐FTTR：{'是' if plan.get('isFTTR') else '否'}",
         f"套餐权益：{plan.get('extras', '') or '无额外权益说明'}",
+        f"月费总额（含搭载）：{monthly_total}元",
+        f"搭载要求：{bundled_info or '无'}",
+        f"办理条件：{required_conditions or '无'}",
         f"推荐理由：{reason}",
         f"风险等级：{risk_level}",
         f"费用变化提示：{format_currency_delta(save_amount)}",
@@ -127,7 +141,8 @@ def extract_chat_completion_text(response: dict) -> str:
     choices = response.get("choices", [])
     if not choices:
         return ""
-    content = choices[0].get("message", {}).get("content")
+    message = choices[0].get("message") or {}
+    content = message.get("content")
     if isinstance(content, str):
         return content.strip()
     if isinstance(content, list):
@@ -215,9 +230,8 @@ def build_request_body(config: dict, prompt: str, *, is_test: bool = False) -> d
     body = {
         "model": model,
         "input": prompt,
+        "max_output_tokens": max_tokens,
     }
-    if is_test:
-        body["max_output_tokens"] = max_tokens
     return body
 
 
@@ -252,14 +266,15 @@ async def generate_recommendation_script(result: dict, config: dict) -> str:
     headers = build_request_headers(config)
 
     safe_headers = {k: ("***" if k.lower() in ("authorization", "x-api-key") else v) for k, v in headers.items()}
-    print(f"AI request → {config.get('protocol')} {url}")
-    print(f"  Headers: {safe_headers}")
-    print(f"  Body: {json.dumps(body, ensure_ascii=False)}")
+    logger.info(f"AI request → {config.get('protocol')} {url}")
+    logger.debug(f"  Headers: {safe_headers}")
+    logger.debug(f"  Body: {json.dumps(body, ensure_ascii=False)}")
 
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.post(url, json=body, headers=headers)
 
-    print(f"AI response ← {response.status_code} {response.text[:500]}")
+    logger.info(f"AI response ← {response.status_code}")
+    logger.debug(f"  Response body: {response.text[:500]}")
 
     try:
         payload = response.json()
@@ -286,9 +301,9 @@ async def test_provider_connection(config: dict) -> str:
     headers = build_request_headers(config)
 
     safe_headers = {k: ("***" if k.lower() in ("authorization", "x-api-key") else v) for k, v in headers.items()}
-    print(f"AI test → {config.get('protocol')} {url}")
-    print(f"  Headers: {safe_headers}")
-    print(f"  Body: {json.dumps(body, ensure_ascii=False)}")
+    logger.info(f"AI test → {config.get('protocol')} {url}")
+    logger.debug(f"  Headers: {safe_headers}")
+    logger.debug(f"  Body: {json.dumps(body, ensure_ascii=False)}")
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -296,7 +311,8 @@ async def test_provider_connection(config: dict) -> str:
     except Exception as e:
         raise ValueError(f"连接失败：{e}")
 
-    print(f"AI test ← {response.status_code} {response.text[:500]}")
+    logger.info(f"AI test ← {response.status_code}")
+    logger.debug(f"  Response body: {response.text[:500]}")
 
     try:
         payload = response.json()
