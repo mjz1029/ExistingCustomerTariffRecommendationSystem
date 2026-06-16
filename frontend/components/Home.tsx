@@ -1,0 +1,222 @@
+import React from 'react';
+import { motion } from 'framer-motion';
+import { BarChart3, Brain, Sparkles, ArrowRight, Cpu, Shield, Zap, CheckCircle } from 'lucide-react';
+import Typewriter from './Typewriter';
+
+interface HomeProps {
+  onStart: () => void;
+}
+
+/* ── Feature Card ───────────────────────────────────────────────── */
+
+interface FeatureProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  delay: number;
+}
+
+function FeatureCard({ icon, title, description, delay }: FeatureProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 40 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-60px' }}
+      transition={{ duration: 0.5, delay }}
+      whileHover={{ y: -8 }}
+      className="group bg-white/10 backdrop-blur-sm rounded-xl border border-white/15 p-8 transition-all hover:bg-white/20 hover:shadow-lg hover:shadow-brand-900/20 cursor-default"
+    >
+      <div className="w-14 h-14 rounded-xl bg-white/15 text-white flex items-center justify-center mb-5 transition-colors group-hover:bg-white group-hover:text-brand-700">
+        {icon}
+      </div>
+      <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
+      <p className="text-sm text-brand-100/80 leading-relaxed">{description}</p>
+    </motion.div>
+  );
+}
+
+/* ── Home Page ──────────────────────────────────────────────────── */
+
+const Home: React.FC<HomeProps> = ({ onStart }) => {
+  return (
+    <div className="flex flex-col">
+
+      {/* ── Full-page blue gradient background ────────────────── */}
+      <div className="relative bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900">
+
+        {/* dot pattern overlay — covers entire page */}
+        <div
+          className="absolute inset-0 opacity-[0.08] pointer-events-none"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle, #fff 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+          }}
+        />
+
+        {/* ── Hero ─────────────────────────────────────────────── */}
+        <section className="relative min-h-[60vh] md:min-h-[80vh] flex items-center justify-center overflow-hidden">
+          <div className="relative z-10 text-center px-6 py-20 max-w-4xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="inline-block mb-6 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm text-white/90 text-sm font-medium border border-white/15"
+            >
+              全新一代存量经营工具
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.15 }}
+            >
+              <Typewriter
+                fixedText=""
+                rotatingTexts={[
+                  '让存量经营更智能',
+                  '让套餐推荐更精准',
+                  '让营销服务更高效',
+                  '让客户体验更有价值',
+                ]}
+              />
+            </motion.div>
+
+            <motion.p
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="mt-6 text-lg text-brand-100/80 max-w-2xl mx-auto leading-relaxed"
+            >
+              基于多维度用户画像与智能规则引擎，为您的一线营销团队提供最精准的套餐适配建议。
+              <br className="hidden sm:block" />
+              拒绝盲目推销，让每一次触达都切中用户需求。
+            </motion.p>
+
+            <motion.button
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.45 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onStart}
+              className="mt-10 inline-flex items-center gap-2 px-8 py-4 bg-white text-brand-700 font-bold text-lg rounded-full shadow-lg hover:shadow-xl transition-shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/60 focus:ring-offset-brand-800"
+            >
+              开始使用
+              <ArrowRight className="w-5 h-5" />
+            </motion.button>
+
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.65 }}
+              className="mt-8 text-xs text-white/40"
+            >
+              本地化处理 · 数据不出网 · 安全可靠
+            </motion.p>
+          </div>
+        </section>
+
+        {/* ── Product Highlights ────────────────────────────────── */}
+        <section className="relative py-20 px-6">
+          <div className="relative z-10 max-w-5xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="text-center mb-14"
+            >
+              <h2 className="text-3xl font-extrabold text-white">产品亮点</h2>
+              <p className="mt-3 text-brand-200/70">四大核心优势，保障推荐质量与数据安全</p>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {[
+                { icon: <Cpu className="w-6 h-6" />, title: '规则引擎驱动', desc: '基于多维用户画像与业务规则，精准匹配最优套餐方案', delay: 0 },
+                { icon: <Shield className="w-6 h-6" />, title: '数据安全保障', desc: '所有数据本地化处理，不出内网，确保信息安全', delay: 0.1 },
+                { icon: <Zap className="w-6 h-6" />, title: '批量高效处理', desc: '支持Excel批量导入，一键完成千人级套餐推荐分析', delay: 0.2 },
+                { icon: <CheckCircle className="w-6 h-6" />, title: '人机协同审核', desc: 'AI推荐 + 人工校正双重机制，确保推荐质量', delay: 0.3 },
+              ].map((item) => (
+                <motion.div
+                  key={item.title}
+                  initial={{ opacity: 0, y: 32 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 0.5, delay: item.delay }}
+                  whileHover={{ y: -4 }}
+                  className="group bg-white/10 backdrop-blur-sm rounded-xl border border-white/15 p-6 flex items-start gap-4 transition-all hover:bg-white/20 hover:shadow-lg hover:shadow-brand-900/20 cursor-default"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-white/15 text-white flex items-center justify-center shrink-0 transition-colors group-hover:bg-white group-hover:text-brand-700">
+                    {item.icon}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white mb-1">{item.title}</h3>
+                    <p className="text-sm text-brand-100/80 leading-relaxed">{item.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Features ─────────────────────────────────────────── */}
+        <section className="relative py-20 px-6">
+          <div className="relative z-10 max-w-6xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="text-center mb-14"
+            >
+              <h2 className="text-3xl font-extrabold text-white">核心功能</h2>
+              <p className="mt-3 text-brand-200/70">三大能力，驱动存量经营全面升级</p>
+            </motion.div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              <FeatureCard
+                icon={<BarChart3 className="w-7 h-7" />}
+                title="数据驱动分析"
+                description="整合 ARPU、流量、语音、宽带等多维数据，全方位评估用户价值与需求，让决策有据可依。"
+                delay={0}
+              />
+              <FeatureCard
+                icon={<Brain className="w-7 h-7" />}
+                title="智能推荐引擎"
+                description="基于「绝不降档」与「资源适配」原则，自动计算最优套餐方案，平衡用户体验与公司收益。"
+                delay={0.1}
+              />
+              <FeatureCard
+                icon={<Sparkles className="w-7 h-7" />}
+                title="AI 营销赋能"
+                description="自动生成针对性营销话术，突出升级利益点，提升外呼成功率与客户满意度。"
+                delay={0.2}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ── Footer CTA ───────────────────────────────────────── */}
+        <section className="relative py-20 px-6 text-center">
+          <div className="relative z-10 max-w-2xl mx-auto">
+            <h2 className="text-3xl font-extrabold text-white mb-4">准备好开始了吗？</h2>
+            <p className="text-brand-100/70 mb-8">只需一步，开启智能存量经营之旅</p>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onStart}
+              className="inline-flex items-center gap-2 px-8 py-4 bg-white text-brand-700 font-bold text-lg rounded-full shadow-lg hover:shadow-xl transition-shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/60 focus:ring-offset-brand-800"
+            >
+              立即体验
+              <ArrowRight className="w-5 h-5" />
+            </motion.button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  );
+};
+
+export default Home;

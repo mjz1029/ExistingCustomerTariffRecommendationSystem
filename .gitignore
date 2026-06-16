@@ -1,25 +1,78 @@
-# Logs
-logs
-*.log
+# ─── macOS ───
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+
+# ─── IDE ───
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+eggs/
+*.whl
+venv/
+.venv/
+env/
+.env
+
+# ─── Database ───
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ─── Node ───
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# ─── Build ───
+dist/
+dist-ssr/
 *.local
+frontend/dist/
+*.spec
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-._*
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# ─── Logs ───
+logs/
+*.log
+
+# ─── Claude Code / Agent Config ───
+.claude/
+.hermes/
+.mimocode/
+AGENTS.md
+
+# ─── Backups ───
+*.bak
+*.bak2
+.backup-*/
+
+# ─── Thesis / personal documents ───
+report.md
+thisis.md
+thesis/
+*.docx
+algorithm-flowchart.html
+architecture-diagram.html
+generate-docx.js
+img/
+答辩问题与答案.md
+# 根目录 docx 脚本依赖（非项目代码）
+package.json
+package-lock.json
+frontend/README.md
