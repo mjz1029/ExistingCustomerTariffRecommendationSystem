@@ -51,9 +51,10 @@ frontend/dist/
 logs/
 *.log
 
-# ─── Claude Code ───
+# ─── Claude Code / Agent Config ───
 .claude/
 .hermes/
+.mimocode/
 
 # ─── Backups ───
 *.bak

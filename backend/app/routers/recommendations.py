@@ -160,7 +160,9 @@ def export_results(batch_id: str = Query(None), db: Session = Depends(get_db)):
     ws.title = "推荐结果"
 
     headers = [
-        "联系电话", "归属地", "当前套餐", "当前档位", "近三个月ARPU",
+        "联系电话", "姓名", "归属地", "网格", "用户地址", "年龄", "民族",
+        "运营商", "客户类型", "当前套餐", "当前档位", "近三个月ARPU",
+        "近三月DOU(GB)", "近三月MOU(分)", "超套金额", "是否零合约", "是否老旧套餐",
         "系统初始推荐", "当前宽带", "最终推荐套餐", "是否人工改选",
         "审核状态", "审核备注", "推荐理由", "AI营销话术",
         "预计月费", "预计节省", "风险等级",
@@ -175,10 +177,22 @@ def export_results(batch_id: str = Query(None), db: Session = Depends(get_db)):
         orig = r.original_recommended_plan
         ws.append([
             u.phone,
+            u.name or "",
             u.province,
+            u.grid or "",
+            u.address or "",
+            u.age or "",
+            u.ethnicity or "",
+            u.carrier or "移动",
+            u.customer_type or "",
             u.current_plan_name,
             u.current_price,
             u.arpu_3_month,
+            u.avg_data or 0,
+            u.avg_voice or 0,
+            u.overage_amount or 0,
+            "是" if u.is_zero_contract else "否",
+            "是" if u.is_old_plan else "否",
             orig.name if orig else "",
             f"{u.broadband_speed}M" if u.has_broadband else "无",
             rec.name if rec else "",
