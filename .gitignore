@@ -55,6 +55,7 @@ logs/
 .claude/
 .hermes/
 .mimocode/
+AGENTS.md
 
 # ─── Backups ───
 *.bak
@@ -71,3 +72,6 @@ architecture-diagram.html
 generate-docx.js
 img/
 答辩问题与答案.md
+package.json          # 根目录 docx 脚本依赖（非项目代码）
+package-lock.json
+frontend/README.md
