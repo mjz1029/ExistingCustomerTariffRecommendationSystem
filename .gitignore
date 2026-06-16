@@ -72,6 +72,7 @@ architecture-diagram.html
 generate-docx.js
 img/
 答辩问题与答案.md
-package.json          # 根目录 docx 脚本依赖（非项目代码）
+# 根目录 docx 脚本依赖（非项目代码）
+package.json
 package-lock.json
 frontend/README.md
